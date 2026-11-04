@@ -17,7 +17,9 @@
   // Super I/O (IT8696E) fan headers the app may control; channel numbers as listed by "board-fans".
   // Channel 0 (about 2400 RPM) is on the CPU fan or pump header and is left on the BIOS curve.
   "BoardFans": [
-    { "Channel": 1, "Name": "Bottom fans (3x, parallel)", "MinDutyPercent": 30 }
+    { "Channel": 1, "Name": "Bottom fans (3x, parallel) - SYS_FAN1", "MinDutyPercent": 30 },
+    { "Channel": 3, "Name": "Rear fan (Corsair RS120) - SYS_FAN3", "MinDutyPercent": 30 }
+    // Channel 2 (SYS_FAN2) has the front fans: tach reads, but PWM did not change their speed (2026-11-04).
   ],
   "Layout": [
     // Canvas is the case viewed from the side window: x 0 = front, 1 = rear; y 0 = top, 1 = bottom.
