@@ -1,0 +1,19 @@
+{
+  "FrameRate": 60,
+  "CanvasWidth": 320,
+  "CanvasHeight": 200,
+  "Fusion2": {
+    "Headers": [
+      // Which physical header each chain is on is not verified. Run "rgbblaster info" and "calibrate".
+      // SA-140 LED count is not published; 0 keeps the header off until "calibrate D_LED1" finds it.
+      { "Header": "D_LED1", "Name": "Front fans (3x Vetroo SA-140)", "LedCount": 0, "ColorOrder": "Auto" },
+      { "Header": "D_LED2", "Name": "Rear fan (Corsair RS120)", "LedCount": 8, "ColorOrder": "Auto" }
+    ]
+  },
+  "Layout": [
+    // Canvas is the case viewed from the side window: x 0 = front, 1 = rear; y 0 = top, 1 = bottom.
+    { "Device": "fusion2", "Zone": "D_LED1", "Shape": "Ring", "X": 0.08, "Y": 0.2, "Radius": 0.06, "Fans": 3, "FanDy": 0.3 },
+    { "Device": "fusion2", "Zone": "D_LED2", "Shape": "Ring", "X": 0.92, "Y": 0.2, "Radius": 0.05 },
+    { "Device": "fusion2", "Zone": "onboard", "Shape": "Line", "X": 0.4, "Y": 0.4, "X2": 0.7, "Y2": 0.4 }
+  ]
+}
