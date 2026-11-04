@@ -1,5 +1,6 @@
 ﻿using RgbBlaster.Core;
 using RgbBlaster.Drivers.Fusion2;
+using RgbBlaster.Drivers.Gpu;
 using RgbBlaster.Drivers.Link;
 using RgbBlaster.Engine;
 
@@ -42,6 +43,12 @@ int Info()
         }
     }
     if (found == 0) Console.WriteLine("No Fusion 2 USB controller found, or it is held by another program.");
+    foreach (var g in NvApi.EnumerateGpus())
+    {
+        var known = g.SubVendor == GigabyteGpuProtocol.GigabyteSubVendor && g.Device == GigabyteGpuProtocol.Rtx5070TiDevice
+            && GigabyteGpuProtocol.Rtx5070Ti.TryGetValue(g.SubDevice, out var card) ? $"{card.Name}, {card.Layout}" : "no RGB support";
+        Console.WriteLine($"GPU {g.Vendor:X4}:{g.Device:X4} sub {g.SubVendor:X4}:{g.SubDevice:X4}  {known}");
+    }
     return found == 0 ? 1 : 0;
 }
 
@@ -84,7 +91,7 @@ int Run(string[] a)
 List<IRgbDevice> OpenAll()
 {
     var list = new List<IRgbDevice>();
-    foreach (var d in Fusion2Device.Discover(config.Fusion2).Cast<IRgbDevice>().Concat(LinkHubDevice.Discover()))
+    foreach (var d in Fusion2Device.Discover(config.Fusion2).Cast<IRgbDevice>().Concat(LinkHubDevice.Discover()).Concat(GigabyteGpuDevice.Discover()))
     {
         try { d.Open(); list.Add(d); }
         catch (Exception ex) { Console.WriteLine($"{d.Name}: open failed: {ex.Message}"); d.Dispose(); }
