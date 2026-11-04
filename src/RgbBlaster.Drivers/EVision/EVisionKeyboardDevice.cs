@@ -10,8 +10,8 @@ namespace RgbBlaster.Drivers.EVision;
 /// Per-key lighting for EVision keyboards (Redragon K580). Open switches the keyboard to its custom-color mode;
 /// Flush rewrites the 54-byte color packets that changed. The keyboard keeps custom colors after the app exits.
 /// It is unknown whether the keyboard writes custom colors to flash, so updates are limited to <see cref="MaxRateHz"/>.
-/// The side bar (zone 1) is not in the color buffer. It shows one of 8 stored palette colors, so it changes only when the
-/// nearest palette entry changes, at most once per <see cref="SideMinIntervalMs"/>.
+/// The side bar (zone 1) is not in the color buffer. It shows one of 8 stored palette colors. A new entry is written after it
+/// holds for <see cref="SideSettleMs"/>; a color that keeps changing hands the bar to its built-in wave.
 /// </summary>
 public sealed class EVisionKeyboardDevice : IRgbDevice
 {
@@ -29,10 +29,11 @@ public sealed class EVisionKeyboardDevice : IRgbDevice
     private readonly Stopwatch _sinceSend = new();
     private bool _sentValid;
 
-    public EVisionKeyboardDevice(IHidTransport io, string name)
+    public EVisionKeyboardDevice(IHidTransport io, string name, int sideSettleMs = SideSettleMs)
     {
         _io = io;
         Name = name;
+        _sideSettleMs = sideSettleMs;
         Zones =
         [
             new LedZoneInfo("keys", "Keys", P.LedCount, P.Positions()),
@@ -40,13 +41,22 @@ public sealed class EVisionKeyboardDevice : IRgbDevice
         ];
     }
 
-    /// <summary>Side-bar changes are stored config writes, so they are limited to one per this interval.</summary>
-    public const int SideMinIntervalMs = 500;
-    private const int SideUnset = -2, SideOff = -1;
+    /// <summary>
+    /// A side-bar palette entry is written only after it stays the same for this time. Each write is a stored config write
+    /// and makes the whole keyboard reload its lighting (a visible flash).
+    /// </summary>
+    public const int SideSettleMs = 2000;
+    /// <summary>Entry changes within one settle window that hand the bar to its built-in wave instead of following the effect.</summary>
+    public const int SideUnstableChanges = 3;
+    private const int SideUnset = -3, SideWave = -2, SideOff = -1;
+    private readonly int _sideSettleMs;
     private Rgb _sideStaged;
     private bool _sideStagedValid;
     private int _sideSent = SideUnset;
-    private readonly Stopwatch _sinceSide = new();
+    private int _sideCandidate = SideUnset;
+    private int _sideChanges;
+    private readonly Stopwatch _candidateAge = new();
+    private readonly Stopwatch _sideWindow = Stopwatch.StartNew();
 
     public string Id => "keyboard";
     public string Name { get; }
@@ -127,12 +137,34 @@ public sealed class EVisionKeyboardDevice : IRgbDevice
             c = _sideStaged;
         }
         int target = P.SideBarIndex(c) ?? SideOff;
-        if (target == _sideSent) return;
-        if (_sideSent != SideUnset && _sinceSide.ElapsedMilliseconds < SideMinIntervalMs) return;
-        if (target == SideOff) WriteConfig(P.SideBarModeAddress, [P.SideBarModeOff]);
-        else WriteConfig(P.SideBarModeAddress, [P.SideBarModeStatic, 0x00, (byte)target]);
-        _sideSent = target;
-        _sinceSide.Restart();
+        if (target != _sideCandidate)
+        {
+            _sideCandidate = target;
+            _candidateAge.Restart();
+            _sideChanges++;
+        }
+        if (_candidateAge.ElapsedMilliseconds >= _sideSettleMs)
+        {
+            _sideChanges = 0;
+            _sideWindow.Restart();
+            WriteSide(_sideCandidate);
+        }
+        else if (_sideWindow.ElapsedMilliseconds >= _sideSettleMs)
+        {
+            if (_sideChanges >= SideUnstableChanges) WriteSide(SideWave);
+            _sideChanges = 0;
+            _sideWindow.Restart();
+        }
+    }
+
+    private void WriteSide(int state)
+    {
+        if (state == _sideSent) return;
+        if (state == SideOff) WriteConfig(P.SideBarModeAddress, [P.SideBarModeOff]);
+        else if (state == SideWave) WriteConfig(P.SideBarModeAddress, [P.SideBarModeWave]);
+        else WriteConfig(P.SideBarModeAddress, [P.SideBarModeStatic, 0x00, (byte)state]);
+        _sideSent = state;
+        _sentValid = false; // the config write reloads the keyboard's lighting; resend all keys
     }
 
     /// <summary>Diagnostic, read-only: returns the full reply to a config read (begin, read, end).</summary>

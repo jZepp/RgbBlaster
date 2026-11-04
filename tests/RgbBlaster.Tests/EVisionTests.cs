@@ -61,6 +61,63 @@ public class EVisionTests
     }
 
     [Fact]
+    public void SideBarIndexPicksNearestPaletteEntry()
+    {
+        Assert.Null(P.SideBarIndex(Rgb.Black));
+        Assert.Equal(7, P.SideBarIndex(Rgb.White));
+        Assert.Equal(7, P.SideBarIndex(new Rgb(120, 120, 110)));
+        Assert.Equal(0, P.SideBarIndex(new Rgb(255, 10, 0)));
+        Assert.Equal(1, P.SideBarIndex(new Rgb(255, 140, 0)));
+        Assert.Equal(3, P.SideBarIndex(new Rgb(0, 200, 30)));
+        Assert.Equal(5, P.SideBarIndex(new Rgb(0, 0, 255)));
+        Assert.Equal(6, P.SideBarIndex(new Rgb(200, 0, 255)));
+        Assert.Equal(0, P.SideBarIndex(new Rgb(255, 0, 40)));   // hue wraps past 360 to red
+    }
+
+    [Fact]
+    public void SideBarWritesSettledEntryOnceAndResendsKeys()
+    {
+        var hw = new FakeEVision();
+        var dev = new EVisionKeyboardDevice(hw, "K580", sideSettleMs: 50);
+        dev.Open();
+        dev.SetZone(1, [new Rgb(0, 0, 255)]);
+        dev.Flush();
+        hw.Writes.Clear();
+        dev.Flush();
+        Assert.DoesNotContain(hw.Writes, w => w[3] == P.CmdSetParameter);  // not settled yet
+
+        Thread.Sleep(60);
+        hw.Writes.Clear();
+        dev.Flush();
+        var side = hw.Writes.Single(w => w[3] == P.CmdSetParameter);
+        Assert.Equal([3, P.SideBarModeAddress], side[4..6]);
+        Assert.Equal([P.SideBarModeStatic, 0, 5], side[8..11]);
+        Assert.Equal(7, hw.Writes.Count(w => w[3] == P.CmdWriteColors));     // keys resent after the reload
+
+        Thread.Sleep(60);
+        hw.Writes.Clear();
+        dev.SetZone(1, [new Rgb(10, 10, 250)]);  // same entry
+        dev.Flush();
+        Assert.DoesNotContain(hw.Writes, w => w[3] == P.CmdSetParameter);
+    }
+
+    [Fact]
+    public void ChangingSideColorHandsBarToBuiltInWave()
+    {
+        var hw = new FakeEVision();
+        var dev = new EVisionKeyboardDevice(hw, "K580", sideSettleMs: 200);
+        dev.Open();
+        hw.Writes.Clear();
+        Rgb[] seq = [new(255, 0, 0), new(0, 255, 0), new(0, 0, 255), new(255, 0, 0)];
+        foreach (var c in seq) { dev.SetZone(1, [c]); dev.Flush(); Thread.Sleep(30); }
+        Thread.Sleep(100);
+        dev.SetZone(1, [new Rgb(0, 255, 0)]);
+        dev.Flush();
+        var side = hw.Writes.Where(w => w[3] == P.CmdSetParameter).ToList();
+        Assert.Equal([P.SideBarModeWave], side.Single()[8..9]);
+    }
+
+    [Fact]
     public void GridPlacementUsesMatrixPositions()
     {
         var pos = P.Positions();
