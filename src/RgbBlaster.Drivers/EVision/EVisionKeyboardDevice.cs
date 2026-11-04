@@ -10,6 +10,8 @@ namespace RgbBlaster.Drivers.EVision;
 /// Per-key lighting for EVision keyboards (Redragon K580). Open switches the keyboard to its custom-color mode;
 /// Flush rewrites the 54-byte color packets that changed. The keyboard keeps custom colors after the app exits.
 /// It is unknown whether the keyboard writes custom colors to flash, so updates are limited to <see cref="MaxRateHz"/>.
+/// The side bar (zone 1) is not in the color buffer. It shows one of 8 stored palette colors, so it changes only when the
+/// nearest palette entry changes, at most once per <see cref="SideMinIntervalMs"/>.
 /// </summary>
 public sealed class EVisionKeyboardDevice : IRgbDevice
 {
@@ -31,8 +33,20 @@ public sealed class EVisionKeyboardDevice : IRgbDevice
     {
         _io = io;
         Name = name;
-        Zones = [new LedZoneInfo("keys", "Keys", P.LedCount, P.Positions())];
+        Zones =
+        [
+            new LedZoneInfo("keys", "Keys", P.LedCount, P.Positions()),
+            new LedZoneInfo("side", "Side bar (left edge, 8-color palette)", 1),
+        ];
     }
+
+    /// <summary>Side-bar changes are stored config writes, so they are limited to one per this interval.</summary>
+    public const int SideMinIntervalMs = 500;
+    private const int SideUnset = -2, SideOff = -1;
+    private Rgb _sideStaged;
+    private bool _sideStagedValid;
+    private int _sideSent = SideUnset;
+    private readonly Stopwatch _sinceSide = new();
 
     public string Id => "keyboard";
     public string Name { get; }
@@ -65,6 +79,12 @@ public sealed class EVisionKeyboardDevice : IRgbDevice
     {
         lock (_stage)
         {
+            if (zoneIndex == 1)
+            {
+                if (colors.Length > 0) { _sideStaged = colors[0]; _sideStagedValid = true; }
+                return;
+            }
+            if (zoneIndex != 0) return;
             int n = Math.Min(colors.Length, P.LedCount);
             for (int i = 0; i < n; i++)
             {
@@ -79,6 +99,7 @@ public sealed class EVisionKeyboardDevice : IRgbDevice
     {
         lock (_ioLock)
         {
+            FlushSide();
             if (_sentValid && _sinceSend.ElapsedMilliseconds < 1000 / MaxRateHz) return;
             lock (_stage) _staged.CopyTo(_sending, 0);
             if (_sentValid && _sending.AsSpan().SequenceEqual(_sent)) return;
@@ -94,6 +115,24 @@ public sealed class EVisionKeyboardDevice : IRgbDevice
             _sentValid = true;
             _sinceSend.Restart();
         }
+    }
+
+    /// <summary>Writes the side-bar mode and palette index when the chosen entry changed. Caller holds _ioLock.</summary>
+    private void FlushSide()
+    {
+        Rgb c;
+        lock (_stage)
+        {
+            if (!_sideStagedValid) return;
+            c = _sideStaged;
+        }
+        int target = P.SideBarIndex(c) ?? SideOff;
+        if (target == _sideSent) return;
+        if (_sideSent != SideUnset && _sinceSide.ElapsedMilliseconds < SideMinIntervalMs) return;
+        if (target == SideOff) WriteConfig(P.SideBarModeAddress, [P.SideBarModeOff]);
+        else WriteConfig(P.SideBarModeAddress, [P.SideBarModeStatic, 0x00, (byte)target]);
+        _sideSent = target;
+        _sinceSide.Restart();
     }
 
     /// <summary>Diagnostic, read-only: returns the full reply to a config read (begin, read, end).</summary>

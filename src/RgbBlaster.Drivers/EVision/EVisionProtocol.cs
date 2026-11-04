@@ -26,6 +26,53 @@ public static class EVisionProtocol
     public const byte BrightnessMax = 0x04;
     public const byte SpeedNormal = 0x03;
 
+    // K580 side light bar (left edge). Stored config, written with CmdSetParameter. Found by diffing config reads and testing on hardware.
+    public const byte SideBarModeAddress = 0x14;
+    public const byte SideBarColorAddress = 0x16;
+    public const byte SideBarModeWave = 0x00;      // moving rainbow (factory default)
+    public const byte SideBarModeCycle = 0x01;     // whole bar cycles through colors
+    public const byte SideBarModeBreathe = 0x02;   // fades in and out, changing color
+    public const byte SideBarModeStatic = 0x03;    // one palette color from SideBarColorAddress
+    public const byte SideBarModeOff = 0x04;
+
+    /// <summary>Static side-bar palette by index. Index 2 (yellow) is probable; the others were confirmed from photos. Index 8 and above turns the bar off.</summary>
+    public static readonly Core.Rgb[] SideBarPalette =
+    [
+        new(255, 0, 0), new(255, 128, 0), new(255, 255, 0), new(0, 255, 0),
+        new(0, 200, 255), new(0, 0, 255), new(160, 0, 255), new(255, 255, 255),
+    ];
+
+    public const int SideBarWhiteIndex = 7;
+
+    /// <summary>
+    /// Side-bar setting for a requested color: null for off (dark), white for unsaturated colors, otherwise the palette entry nearest in hue.
+    /// </summary>
+    public static int? SideBarIndex(Core.Rgb c)
+    {
+        int max = Math.Max(c.R, Math.Max(c.G, c.B)), min = Math.Min(c.R, Math.Min(c.G, c.B));
+        if (max < 32) return null;
+        if (max - min < max / 4) return SideBarWhiteIndex;
+        float h = Hue(c);
+        int best = 0;
+        float bestDist = float.MaxValue;
+        for (int i = 0; i < SideBarWhiteIndex; i++)
+        {
+            float d = Math.Abs(h - Hue(SideBarPalette[i]));
+            d = Math.Min(d, 360 - d);
+            if (d < bestDist) { bestDist = d; best = i; }
+        }
+        return best;
+    }
+
+    private static float Hue(Core.Rgb c)
+    {
+        float r = c.R, g = c.G, b = c.B, max = Math.Max(r, Math.Max(g, b)), min = Math.Min(r, Math.Min(g, b)), d = max - min;
+        if (d == 0) return 0;
+        float h = max == r ? (g - b) / d : max == g ? 2 + (b - r) / d : 4 + (r - g) / d;
+        h *= 60;
+        return h < 0 ? h + 360 : h;
+    }
+
     /// <summary>Begin and end packets carry the command in bytes 1 and 3 and no checksum.</summary>
     public static void Control(Span<byte> buf, byte command)
     {

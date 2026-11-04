@@ -33,6 +33,7 @@
     // Mouse and keyboard sit outside the case; they sample the lower front corner of the canvas.
     { "Device": "mouse", "Zone": "z0", "Shape": "Line", "X": 0.05, "Y": 0.95, "X2": 0.05, "Y2": 0.95 },
     { "Device": "mouse", "Zone": "z1", "Shape": "Line", "X": 0.1, "Y": 0.95, "X2": 0.1, "Y2": 0.95 },
-    { "Device": "keyboard", "Zone": "keys", "Shape": "Grid", "X": 0.15, "Y": 0.82, "X2": 0.85, "Y2": 0.98 }
+    { "Device": "keyboard", "Zone": "keys", "Shape": "Grid", "X": 0.15, "Y": 0.82, "X2": 0.85, "Y2": 0.98 },
+    { "Device": "keyboard", "Zone": "side", "Shape": "Line", "X": 0.14, "Y": 0.9, "X2": 0.14, "Y2": 0.9 }
   ]
 }
