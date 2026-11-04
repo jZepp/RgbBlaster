@@ -38,18 +38,18 @@ internal static class Identify
         }
         if (devices.Count == 0) { Console.WriteLine("No devices."); return 1; }
 
-        // The LINK hub returns to its stored lighting when it gets no frames, so keep it fed while we wait for input.
+        // The LINK hub and the board return to their own lighting when they get no frames, so keep them fed while we wait for input.
         var hubs = devices.OfType<LinkHubDevice>().ToList();
         using var stop = new CancellationTokenSource();
         var keepAlive = new Thread(() =>
         {
             while (!stop.Token.WaitHandle.WaitOne(500))
-                foreach (var h in hubs)
+                foreach (var d in devices)
                 {
-                    try { h.Flush(); h.Poll(); }
-                    catch (Exception ex) { Console.WriteLine($"LINK keep-alive: {ex.Message}"); }
+                    try { d.Flush(); if (d is LinkHubDevice h) h.Poll(); }
+                    catch (Exception ex) { Console.WriteLine($"{d.Id} keep-alive: {ex.Message}"); }
                 }
-        }) { IsBackground = true, Name = "link-keepalive" };
+        }) { IsBackground = true, Name = "keepalive" };
         keepAlive.Start();
 
         try

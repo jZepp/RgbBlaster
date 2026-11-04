@@ -19,9 +19,9 @@
     { "Device": "fusion2", "Zone": "D_LED2", "Shape": "Ring", "X": 0.07, "Y": 0.2, "Radius": 0.07, "Fans": 3, "FanDy": 0.3 },
     { "Device": "fusion2", "Zone": "D_LED3", "Shape": "Ring", "X": 0.3, "Y": 0.92, "Radius": 0.07, "Fans": 3, "FanDx": 0.22 },
     { "Device": "fusion2", "Zone": "onboard", "Shape": "Line", "X": 0.4, "Y": 0.75, "X2": 0.75, "Y2": 0.75 },
-    // LINK: ch1 TITAN pump LEDs (not seen; likely under the LCD cap), ch2 LCD cap ring, ch13-15 top radiator fans.
-    { "Device": "link", "Zone": "ch1", "Shape": "Ring", "X": 0.55, "Y": 0.38, "Radius": 0.03 },
-    { "Device": "link", "Zone": "ch2", "Shape": "Ring", "X": 0.55, "Y": 0.38, "Radius": 0.045 },
+    // LINK: ch1 TITAN outer ring around the cooler, ch2 LCD cap inner ring, ch13-15 top radiator fans.
+    { "Device": "link", "Zone": "ch1", "Shape": "Ring", "X": 0.55, "Y": 0.38, "Radius": 0.06 },
+    { "Device": "link", "Zone": "ch2", "Shape": "Ring", "X": 0.55, "Y": 0.38, "Radius": 0.035 },
     { "Device": "link", "Zone": "ch13", "Shape": "Ring", "X": 0.3, "Y": 0.07, "Radius": 0.07 },
     { "Device": "link", "Zone": "ch14", "Shape": "Ring", "X": 0.52, "Y": 0.07, "Radius": 0.07 },
     { "Device": "link", "Zone": "ch15", "Shape": "Ring", "X": 0.74, "Y": 0.07, "Radius": 0.07 }

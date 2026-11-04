@@ -150,22 +150,24 @@ public sealed class Fusion2Device : IRgbDevice
         }
     }
 
+    /// <summary>Safe to call from several threads: a keep-alive thread and the render worker may both flush.</summary>
     public void Flush()
     {
-        lock (_stage)
-        {
-            foreach (var s in _strips) s.Staged.CopyTo(s.Sending, 0);
-            _onboardStaged.CopyTo(_onboardSending, 0);
-        }
-
-        if (_sinceFull.ElapsedMilliseconds >= FullRefreshMs)
-        {
-            ForceFull();
-            _sinceFull.Restart();
-        }
-
         lock (_ioLock)
         {
+            lock (_stage)
+            {
+                foreach (var s in _strips) s.Staged.CopyTo(s.Sending, 0);
+                _onboardStaged.CopyTo(_onboardSending, 0);
+            }
+
+            // The board drops back to its built-in effect when it gets no direct data, so resend every strip each second.
+            if (_sinceFull.ElapsedMilliseconds >= FullRefreshMs)
+            {
+                ForceFull();
+                _sinceFull.Restart();
+            }
+
             foreach (var s in _strips)
             {
                 for (int first = 0; first < s.Sending.Length; first += P.MaxLedsPerPacket)
