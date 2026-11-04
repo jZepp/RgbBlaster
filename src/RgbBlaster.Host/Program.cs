@@ -3,6 +3,7 @@ using RgbBlaster.Drivers.Fusion2;
 using RgbBlaster.Drivers.EVision;
 using RgbBlaster.Drivers.Gpu;
 using RgbBlaster.Drivers.Logitech;
+using RgbBlaster.Drivers.Lcd;
 using RgbBlaster.Drivers.Link;
 using RgbBlaster.Drivers.SuperIo;
 using RgbBlaster.Engine;
@@ -22,6 +23,7 @@ switch (cmd)
     case "keyboard-poke": return KeyboardPoke(args.Skip(1).ToArray());
     case "board-fans": return BoardFans();
     case "temps": return Temps();
+    case "lcd-test": return LcdTest(args.Skip(1).ToArray());
     case "board-fan-test": return BoardFanTest(args.Skip(1).ToArray());
     default:
         Console.WriteLine("""
@@ -30,6 +32,7 @@ switch (cmd)
             rgbblaster board-fans                Super I/O fan RPM, PWM and temperatures (reads only; needs PawnIO, run as admin)
             rgbblaster board-fan-test <ch> [duty%..] Runs one header at each duty for 8 s (default 100 40), then back to BIOS (admin)
             rgbblaster temps                     Every temperature sensor and its id, for fan curves (reads only; admin)
+            rgbblaster lcd-test [image]          Shows the status screen (or an image) on the pump LCD for 20 s, then hands it back
             rgbblaster link-info                 LINK hub devices, RPM, temperatures (sets fans 50%, pump 100% while open)
             rgbblaster run solid <RRGGBB>        Static color on every zone
             rgbblaster run rainbow               Rainbow wave across the canvas
@@ -91,6 +94,11 @@ int Run(string[] a)
     var fanCtl = new FanController(config.FanCurves, fans, hm);
     foreach (var w in fanCtl.Warnings) Console.WriteLine($"Fan curves: {w}");
 
+    // Pump cap LCD: status screen refreshed each second.
+    var lcd = OpenLcd();
+    using var dash = lcd is null ? null : new LcdDashboard();
+    var pump = fans.FirstOrDefault(f => f.IsPump);
+
     using (var loop = new RenderLoop(config, devices, effect))
     {
         loop.Start();
@@ -106,11 +114,21 @@ int Run(string[] a)
                 try { h.Poll(); }
                 catch (Exception ex) { Console.WriteLine($"LINK poll: {ex.Message}"); }
             }
+            if (lcd is not null && dash is not null)
+            {
+                try { lcd.ShowJpeg(dash.Render(hm.ReadCelsius("cpu"), hm.ReadCelsius("gpu"), pump?.ReadRpm())); }
+                catch (Exception ex) { Console.WriteLine($"LCD: {ex.Message}"); }
+            }
             var rpm = string.Join(" ", fans.Select(f => $"{f.Id}:{f.ReadRpm()?.ToString() ?? "-"}"));
             Console.WriteLine($"render {loop.LastRenderMs:F2} ms  {string.Join("  ", fanCtl.Status())}  {rpm}");
         }
     }
     board?.Release();
+    if (lcd is not null)
+    {
+        try { lcd.Release(); } catch { /* best effort on shutdown */ }
+        lcd.Dispose();
+    }
 
     ExitLightingRunner.Apply(devices, config.OnExit);
     return 0;
@@ -281,5 +299,34 @@ int Temps()
         Console.WriteLine($"{(v is float f ? $"{f,5:F1} C" : "    -  ")}  {hw} / {name}  [{id}]");
     foreach (var s in new[] { "cpu", "gpu" })
         Console.WriteLine($"\"{s}\" reads {(hm.ReadCelsius(s) is float t ? $"{t:F1} C" : "nothing")}");
+    return 0;
+}
+
+LinkLcdDevice? OpenLcd()
+{
+    try { return LinkLcdDevice.Discover().FirstOrDefault(); }
+    catch (Exception ex) { Console.WriteLine($"LCD: open failed: {ex.Message}"); return null; }
+}
+
+int LcdTest(string[] a)
+{
+    using var lcd = OpenLcd();
+    if (lcd is null) { Console.WriteLine("No iCUE LINK LCD (1B1C:0C4E)."); return 1; }
+    using var hm = new HardwareMonitorSession();
+    using var dash = new LcdDashboard();
+    using var stop = new ManualResetEventSlim();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Set(); };
+    string? image = a.FirstOrDefault();
+    Console.WriteLine($"LCD {lcd.Serial.Length} char serial. {(image is null ? "Status screen" : image)} for 20 s; Ctrl+C stops.");
+    var frameFromFile = image is null ? null : dash.FromFile(image);
+    for (int i = 0; i < 20 && !stop.IsSet; i++)
+    {
+        var frame = frameFromFile ?? dash.Render(hm.ReadCelsius("cpu"), hm.ReadCelsius("gpu"), null);
+        lcd.ShowJpeg(frame);
+        Console.WriteLine($"  frame {i + 1}: {frame.Length} bytes");
+        stop.Wait(1000);
+    }
+    lcd.Release();
+    Console.WriteLine("Handed the screen back.");
     return 0;
 }
