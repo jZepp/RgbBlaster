@@ -63,6 +63,19 @@ public static class EVisionProtocol
         Checksum(buf);
     }
 
+    /// <summary>Writes config bytes at <paramref name="address"/>. The keyboard stores its config, so the change persists.</summary>
+    public static void WriteParameter(Span<byte> buf, byte address, ReadOnlySpan<byte> data)
+    {
+        if (data.Length > ReportLength - DataOffset) throw new ArgumentOutOfRangeException(nameof(data));
+        buf[..ReportLength].Clear();
+        buf[0] = ReportId;
+        buf[3] = CmdSetParameter;
+        buf[4] = (byte)data.Length;
+        buf[5] = address;
+        data.CopyTo(buf[DataOffset..]);
+        Checksum(buf);
+    }
+
     public static void Colors(Span<byte> buf, int offset, ReadOnlySpan<byte> data)
     {
         if (data.Length > MaxColorBytes) throw new ArgumentOutOfRangeException(nameof(data));

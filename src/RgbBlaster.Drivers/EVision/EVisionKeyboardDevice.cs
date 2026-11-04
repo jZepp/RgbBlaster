@@ -113,6 +113,20 @@ public sealed class EVisionKeyboardDevice : IRgbDevice
         }
     }
 
+    /// <summary>Diagnostic: writes raw config bytes (begin, write, end). The keyboard keeps them.</summary>
+    public void WriteConfig(byte address, ReadOnlySpan<byte> data)
+    {
+        lock (_ioLock)
+        {
+            P.Control(_out, P.CmdBegin);
+            Exchange();
+            P.WriteParameter(_out, address, data);
+            Exchange();
+            P.Control(_out, P.CmdEnd);
+            Exchange();
+        }
+    }
+
     /// <summary>The keyboard has no host mode to leave; it keeps the last custom colors.</summary>
     public void Release() { }
 

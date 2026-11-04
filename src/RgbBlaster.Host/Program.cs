@@ -18,6 +18,7 @@ switch (cmd)
     case "link-info": return LinkInfo();
     case "identify": return Identify.Run(args.Skip(1).ToArray(), config);
     case "keyboard-config": return KeyboardConfig();
+    case "keyboard-poke": return KeyboardPoke(args.Skip(1).ToArray());
     default:
         Console.WriteLine("""
             rgbblaster identify lights|fans|walk Map zones and fan channels to physical parts
@@ -127,6 +128,23 @@ int KeyboardConfig()
             for (int i = 8; i < r.Length; i += 16)
                 Console.WriteLine($"  +0x{addr + i - 8:X2}: {Convert.ToHexString(r.AsSpan(i, Math.Min(16, r.Length - i)))}");
         }
+    return 0;
+}
+
+// Writes raw keyboard config bytes: keyboard-poke <address hex> <data hex>, e.g. keyboard-poke 2A 06. Prints the block after.
+int KeyboardPoke(string[] a)
+{
+    if (a.Length < 2) { Console.WriteLine("Usage: rgbblaster keyboard-poke <address hex> <data hex>"); return 2; }
+    byte addr = Convert.ToByte(a[0], 16);
+    var data = Convert.FromHexString(a[1]);
+    var kb = EVisionKeyboardDevice.Discover().FirstOrDefault();
+    if (kb is null) { Console.WriteLine("No EVision keyboard."); return 1; }
+    using (kb)
+    {
+        kb.WriteConfig(addr, data);
+        var r = kb.ReadConfig(addr, 16);
+        Console.WriteLine($"0x{addr:X2} now: {Convert.ToHexString(r.AsSpan(8, 16))}");
+    }
     return 0;
 }
 
