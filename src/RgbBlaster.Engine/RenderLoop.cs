@@ -36,7 +36,7 @@ public sealed class RenderLoop : IDisposable
                     p.Zone.Equals(info.Id, StringComparison.OrdinalIgnoreCase));
                 // Unplaced zones sample the canvas centre so they still follow the effect.
                 place ??= new ZonePlacement { Shape = PlacementShape.Line, X = 0.5f, Y = 0.5f, X2 = 0.5f, Y2 = 0.5f };
-                zones.Add(new Binding(z, LayoutMapper.Map(place, info.LedCount, _canvas.Width, _canvas.Height), new Rgb[info.LedCount]));
+                zones.Add(new Binding(z, LayoutMapper.Map(place, info.LedCount, _canvas.Width, _canvas.Height, info.Positions), new Rgb[info.LedCount]));
             }
             _targets.Add((dev, zones.ToArray(), new DeviceWorker(dev)));
         }

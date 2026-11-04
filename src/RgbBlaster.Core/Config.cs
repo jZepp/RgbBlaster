@@ -69,7 +69,8 @@ public sealed class Fusion2HeaderConfig
     public ColorOrderSetting ColorOrder { get; set; } = ColorOrderSetting.Auto;
 }
 
-public enum PlacementShape { Ring, Line }
+/// <summary>Grid places each LED at the device-reported position inside the rectangle X,Y to X2,Y2.</summary>
+public enum PlacementShape { Ring, Line, Grid }
 
 /// <summary>Places a zone's LEDs on the canvas. Coordinates are 0..1 of canvas width/height.</summary>
 public sealed class ZonePlacement
@@ -87,7 +88,7 @@ public sealed class ZonePlacement
     public float FanDx { get; set; }
     public float FanDy { get; set; }
 
-    // Line.
+    // Line and Grid (Grid: X,Y is the top-left corner, X2,Y2 the bottom-right).
     public float X2 { get; set; }
     public float Y2 { get; set; }
 }

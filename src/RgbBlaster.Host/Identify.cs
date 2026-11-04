@@ -1,5 +1,6 @@
 using RgbBlaster.Core;
 using RgbBlaster.Drivers.Fusion2;
+using RgbBlaster.Drivers.EVision;
 using RgbBlaster.Drivers.Gpu;
 using RgbBlaster.Drivers.Logitech;
 using RgbBlaster.Drivers.Link;
@@ -33,7 +34,7 @@ internal static class Identify
         };
 
         var devices = new List<IRgbDevice>();
-        foreach (var d in Fusion2Device.Discover(probe).Cast<IRgbDevice>().Concat(LinkHubDevice.Discover()).Concat(GigabyteGpuDevice.Discover()).Concat(LogitechMouseDevice.Discover()))
+        foreach (var d in Fusion2Device.Discover(probe).Cast<IRgbDevice>().Concat(LinkHubDevice.Discover()).Concat(GigabyteGpuDevice.Discover()).Concat(LogitechMouseDevice.Discover()).Concat(EVisionKeyboardDevice.Discover()))
         {
             try { d.Open(); devices.Add(d); }
             catch (Exception ex) { Console.WriteLine($"{d.Name}: open failed: {ex.Message}"); d.Dispose(); }

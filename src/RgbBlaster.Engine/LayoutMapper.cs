@@ -5,7 +5,7 @@ namespace RgbBlaster.Engine;
 /// <summary>Turns a zone placement into one canvas pixel index per LED. Computed once; per-frame sampling is a gather.</summary>
 public static class LayoutMapper
 {
-    public static int[] Map(ZonePlacement p, int ledCount, int width, int height)
+    public static int[] Map(ZonePlacement p, int ledCount, int width, int height, IReadOnlyList<(float X, float Y)>? positions = null)
     {
         var idx = new int[ledCount];
         if (ledCount == 0) return idx;
@@ -28,6 +28,14 @@ public static class LayoutMapper
                 }
                 break;
             }
+            case PlacementShape.Grid when positions is not null:
+                for (int i = 0; i < ledCount; i++)
+                {
+                    var (gx, gy) = i < positions.Count ? positions[i] : (0.5f, 0.5f);
+                    idx[i] = Pixel(p.X + (p.X2 - p.X) * gx, p.Y + (p.Y2 - p.Y) * gy, width, height);
+                }
+                break;
+            case PlacementShape.Grid:
             case PlacementShape.Line:
                 for (int i = 0; i < ledCount; i++)
                 {

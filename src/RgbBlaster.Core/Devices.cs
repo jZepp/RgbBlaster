@@ -3,7 +3,8 @@ namespace RgbBlaster.Core;
 public enum DeviceKind { Motherboard, FanHub, Cooler, Mouse, Keyboard, Gpu, Lcd, Accessory }
 
 /// <param name="Id">Stable within the device; used by layout files.</param>
-public sealed record LedZoneInfo(string Id, string Name, int LedCount);
+/// <param name="Positions">Optional LED positions inside the zone, 0..1 each axis, used by the Grid placement.</param>
+public sealed record LedZoneInfo(string Id, string Name, int LedCount, IReadOnlyList<(float X, float Y)>? Positions = null);
 
 /// <summary>
 /// A device whose LEDs the engine drives.
