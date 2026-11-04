@@ -10,6 +10,8 @@ internal static class Identify
 
     public static int Run(string[] a, AppConfig config)
     {
+        var flags = a.Where(x => x.StartsWith("--")).ToArray();
+        a = a.Where(x => !x.StartsWith("--")).ToArray();
         var mode = (a.ElementAtOrDefault(0) ?? "lights").ToLowerInvariant();
 
         // Drive every Fusion 2 header, configured or not, so unconfigured wiring shows up too.
@@ -22,9 +24,10 @@ internal static class Identify
                 LedCount = ProbeLeds,
                 ColorOrder = config.Fusion2.Headers.FirstOrDefault(c => c.Header == h)?.ColorOrder ?? ColorOrderSetting.Auto,
             }).ToList(),
-            // Every firmware zone, so walk index = zone number and board LEDs outside the default set show up.
-            OnboardZones = [.. Enumerable.Range(0, 11)],
-            ForceLampArrayOff = true,
+            // Experiments, off by default: --all-zones drives firmware zones 0-10 (walk index = zone number);
+            // --lamp-off sends 0x48 00 although the board does not report support for it.
+            OnboardZones = flags.Contains("--all-zones") ? [.. Enumerable.Range(0, 11)] : [],
+            ForceLampArrayOff = flags.Contains("--lamp-off"),
         };
 
         var devices = new List<IRgbDevice>();
@@ -77,6 +80,7 @@ internal static class Identify
             rgbblaster identify lights [RRGGBB]      Light chosen zones (default white)
             rgbblaster identify fans                 Run one LINK channel at 100%, others at 30%
             rgbblaster identify walk <device> <zone> Light one LED at a time in a zone (e.g. walk link ch1)
+            Flags: --all-zones (board firmware zones 0-10), --lamp-off (force lamp-array mode off)
             """);
         return 2;
     }
