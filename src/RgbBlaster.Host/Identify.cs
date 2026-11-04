@@ -60,6 +60,7 @@ internal static class Identify
                 "lights" => Lights(devices, Rgb.Parse(a.ElementAtOrDefault(1) ?? "FFFFFF")),
                 "fans" => Fans(devices.OfType<LinkHubDevice>().ToList()),
                 "walk" => Walk(devices, a.ElementAtOrDefault(1), a.ElementAtOrDefault(2)),
+                "gpu" => GpuZones(devices.OfType<GigabyteGpuDevice>().FirstOrDefault()),
                 _ => Usage(),
             };
         }
@@ -77,6 +78,7 @@ internal static class Identify
             rgbblaster identify lights [RRGGBB]      Light chosen zones (default white)
             rgbblaster identify fans                 Run one LINK channel at 100%, others at 30%
             rgbblaster identify walk <device> <zone> Light one LED at a time in a zone (e.g. walk link ch1)
+            rgbblaster identify gpu                  Light each GPU hardware zone, live-color then stored-effect register
             Flags: --all-zones (board firmware zones 0-10), --lamp-off (force lamp-array mode off)
             """);
         return 2;
@@ -163,6 +165,21 @@ internal static class Identify
         foreach (var (_, f) in fans)
             f.SetDutyPercent(f.IsPump ? LinkHubDevice.DefaultPumpPercent : LinkHubDevice.DefaultFanPercent);
         foreach (var h in fans.Select(x => x.Hub).Distinct()) h.Poll();
+        return 0;
+    }
+
+    /// <summary>Steps through GPU hardware zones 0-7 with the live-color register (0x16), then the stored-effect register (0x12).</summary>
+    private static int GpuZones(GigabyteGpuDevice? gpu)
+    {
+        if (gpu is null) { Console.WriteLine("No Gigabyte GPU found."); return 1; }
+        Console.WriteLine("Each step lights one hardware zone red. Note what lights. Enter = next, q = quit.");
+        foreach (var (reg, label) in new[] { (GigabyteGpuProtocol.RegColor, "live 0x16"), (GigabyteGpuProtocol.RegMode, "effect 0x12") })
+            for (int hz = 0; hz < 8; hz++)
+            {
+                gpu.ProbeZone(reg, hz);
+                Console.Write($"{label} zone {hz} > ");
+                if (Console.ReadLine()?.Trim().ToLowerInvariant() == "q") return 0;
+            }
         return 0;
     }
 

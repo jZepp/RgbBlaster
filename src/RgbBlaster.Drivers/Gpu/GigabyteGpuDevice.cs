@@ -103,6 +103,24 @@ public sealed class GigabyteGpuDevice : IRgbDevice, IPersistentLighting
         }
     }
 
+    /// <summary>
+    /// Diagnostic: lights one hardware zone (0-7) red with the given register, all other zones black.
+    /// <see cref="P.RegMode"/> changes the card's current effect but is not saved without <see cref="P.RegSave"/>.
+    /// </summary>
+    public void ProbeZone(byte register, int hardwareZone, int zoneCount = 8)
+    {
+        byte mode = register == P.RegColor ? P.ModeDirect : P.ModeStatic;
+        lock (_ioLock)
+        {
+            for (int hz = 0; hz < zoneCount; hz++)
+            {
+                P.ColorPacket(_buf, register, mode, hz, hz == hardwareZone ? new Rgb(255, 0, 0) : Rgb.Black);
+                _bus.Write(P.Address, _buf);
+            }
+            _sentValid = false;
+        }
+    }
+
     private Rgb Color(int hardwareZone)
     {
         lock (_stage) return _staged[Math.Min(hardwareZone, _staged.Length - 1)];
