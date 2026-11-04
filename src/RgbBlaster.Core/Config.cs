@@ -35,6 +35,12 @@ public sealed class Fusion2Config
     /// Zones 0-7 use commands 0x20-0x27, zones 8-10 use 0x90-0x92.
     /// </summary>
     public List<int> OnboardZones { get; set; } = [];
+
+    /// <summary>
+    /// Sends the lamp-array-off command (0x48 00) even when the board does not report support for it.
+    /// The command takes the board out of Windows Dynamic Lighting control.
+    /// </summary>
+    public bool ForceLampArrayOff { get; set; }
 }
 
 public enum Fusion2Header { D_LED1, D_LED2, D_LED3, D_LED4, ONBOARD1, ONBOARD2 }

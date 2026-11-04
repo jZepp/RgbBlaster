@@ -29,6 +29,7 @@ public sealed class Fusion2Device : IRgbDevice
     private readonly ushort _pid;
     private readonly Strip[] _strips;
     private readonly int[] _onboardZones;
+    private readonly bool _forceLampArrayOff;
     private readonly Rgb[] _onboardStaged;
     private readonly Rgb[] _onboardSending;
     private readonly Rgb[] _onboardSent;
@@ -43,6 +44,7 @@ public sealed class Fusion2Device : IRgbDevice
         _io = io;
         _pid = pid;
         Id = id;
+        _forceLampArrayOff = config.ForceLampArrayOff;
         _onboardZones = config.OnboardZones is { Count: > 0 } oz ? oz.ToArray() : P.OnboardZones;
         if (_onboardZones.Any(z => z is < 0 or > 10)) throw new ArgumentException("Fusion 2 onboard zones must be 0-10.", nameof(config));
         _onboardStaged = new Rgb[_onboardZones.Length];
@@ -99,7 +101,7 @@ public sealed class Fusion2Device : IRgbDevice
         var info = ReadInfo();
         lock (_ioLock)
         {
-            if ((info.SupportFlags & 0x02) != 0) Send(P.CmdLampArray, 0x00);
+            if (_forceLampArrayOff || (info.SupportFlags & 0x02) != 0) Send(P.CmdLampArray, 0x00);
             for (byte z = 0x20; z <= 0x27; z++) Send(z);
             if (_pid == P.PidIt5711)
                 for (byte z = 0x90; z <= 0x92; z++) Send(z);

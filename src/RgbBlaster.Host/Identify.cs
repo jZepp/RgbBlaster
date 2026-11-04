@@ -24,6 +24,7 @@ internal static class Identify
             }).ToList(),
             // Every firmware zone, so walk index = zone number and board LEDs outside the default set show up.
             OnboardZones = [.. Enumerable.Range(0, 11)],
+            ForceLampArrayOff = true,
         };
 
         var devices = new List<IRgbDevice>();
