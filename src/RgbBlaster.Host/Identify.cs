@@ -52,7 +52,7 @@ internal static class Identify
         {
             return mode switch
             {
-                "lights" => Lights(devices),
+                "lights" => Lights(devices, Rgb.Parse(a.ElementAtOrDefault(1) ?? "FFFFFF")),
                 "fans" => Fans(devices.OfType<LinkHubDevice>().ToList()),
                 "walk" => Walk(devices, a.ElementAtOrDefault(1), a.ElementAtOrDefault(2)),
                 _ => Usage(),
@@ -73,15 +73,15 @@ internal static class Identify
     private static int Usage()
     {
         Console.WriteLine("""
-            rgbblaster identify lights               Light one zone at a time
+            rgbblaster identify lights [RRGGBB]      Light chosen zones (default white)
             rgbblaster identify fans                 Run one LINK channel at 100%, others at 30%
             rgbblaster identify walk <device> <zone> Light one LED at a time in a zone (e.g. walk link ch1)
             """);
         return 2;
     }
 
-    /// <summary>Menu: lights the chosen zone(s) white with every other zone off.</summary>
-    private static int Lights(List<IRgbDevice> devices)
+    /// <summary>Menu: lights the chosen zone(s) in one color with every other zone off.</summary>
+    private static int Lights(List<IRgbDevice> devices, Rgb color)
     {
         var targets = devices.SelectMany(d => d.Zones.Select((z, i) => (Device: d, Index: i, Zone: z))).ToList();
         var on = new HashSet<int>();
@@ -117,7 +117,7 @@ internal static class Identify
                 for (int z = 0; z < d.Zones.Count; z++)
                 {
                     int t = targets.FindIndex(x => x.Device == d && x.Index == z);
-                    d.SetZone(z, Enumerable.Repeat(on.Contains(t) ? Rgb.White : Rgb.Black, d.Zones[z].LedCount).ToArray());
+                    d.SetZone(z, Enumerable.Repeat(on.Contains(t) ? color : Rgb.Black, d.Zones[z].LedCount).ToArray());
                 }
                 d.Flush();
             }
