@@ -62,27 +62,48 @@ internal static class Identify
         return 2;
     }
 
-    /// <summary>Lights each zone white with every other zone off.</summary>
+    /// <summary>Menu: lights the chosen zone(s) white with every other zone off.</summary>
     private static int Lights(List<IRgbDevice> devices)
     {
         var targets = devices.SelectMany(d => d.Zones.Select((z, i) => (Device: d, Index: i, Zone: z))).ToList();
-        Console.WriteLine($"{targets.Count} zones. Enter = next, q = quit. Note what lights up for each step.");
-        for (int t = 0; t < targets.Count; t++)
+        var on = new HashSet<int>();
+        while (true)
         {
+            Console.WriteLine();
+            for (int t = 0; t < targets.Count; t++)
+            {
+                var (dev, _, zone) = targets[t];
+                Console.WriteLine($" {(on.Contains(t) ? "*" : " ")} {t + 1,2}  {dev.Id}/{zone.Id,-9} {zone.Name}  ({zone.LedCount} LEDs)");
+            }
+            Console.Write("Zone number(s) to light (e.g. 3 or 3,10), a = all, o = off, q = quit > ");
+            var input = Console.ReadLine()?.Trim().ToLowerInvariant();
+            if (input is null or "q") return 0;
+
+            if (input == "a") on = Enumerable.Range(0, targets.Count).ToHashSet();
+            else if (input == "o") on.Clear();
+            else
+            {
+                var picked = input.Split(',', ' ', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(s => int.TryParse(s, out var n) ? n - 1 : -1)
+                    .ToList();
+                if (picked.Count == 0 || picked.Any(n => n < 0 || n >= targets.Count))
+                {
+                    Console.WriteLine($"Enter numbers from 1 to {targets.Count}.");
+                    continue;
+                }
+                on = picked.ToHashSet();
+            }
+
             foreach (var d in devices)
             {
                 for (int z = 0; z < d.Zones.Count; z++)
                 {
-                    bool on = d == targets[t].Device && z == targets[t].Index;
-                    d.SetZone(z, Enumerable.Repeat(on ? Rgb.White : Rgb.Black, d.Zones[z].LedCount).ToArray());
+                    int t = targets.FindIndex(x => x.Device == d && x.Index == z);
+                    d.SetZone(z, Enumerable.Repeat(on.Contains(t) ? Rgb.White : Rgb.Black, d.Zones[z].LedCount).ToArray());
                 }
                 d.Flush();
             }
-            var (dev, _, zone) = targets[t];
-            Console.Write($"[{t + 1}/{targets.Count}] {dev.Id}/{zone.Id}  {zone.Name}  ({zone.LedCount} LEDs) > ");
-            if (Console.ReadLine()?.Trim().ToLowerInvariant() == "q") break;
         }
-        return 0;
     }
 
     /// <summary>
