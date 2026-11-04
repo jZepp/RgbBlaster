@@ -7,7 +7,7 @@
       // Mapped with "identify lights" on 2026-11-04.
       // LedCount 0 keeps a header off. Find the real count with "identify walk fusion2 <header>".
       { "Header": "D_LED1", "Name": "Rear fan (Corsair RS120)", "LedCount": 8, "ColorOrder": "Auto" },
-      { "Header": "D_LED2", "Name": "Front fans (3x Vetroo SA-140)", "LedCount": 12, "ColorOrder": "Auto" },
+      { "Header": "D_LED2", "Name": "Front fans (3x Vetroo SA-140, parallel)", "LedCount": 12, "ColorOrder": "Auto" },
       { "Header": "D_LED3", "Name": "Bottom fans (3x)", "LedCount": 8, "ColorOrder": "Auto" },
       { "Header": "D_LED4", "Name": "Unused (nothing connected)", "LedCount": 0, "ColorOrder": "Auto" }
     ],
@@ -18,7 +18,8 @@
     // Canvas is the case viewed from the side window: x 0 = front, 1 = rear; y 0 = top, 1 = bottom.
     // Fan order inside a chain is assumed front-to-rear and top-to-bottom; confirm with "identify walk".
     { "Device": "fusion2", "Zone": "D_LED1", "Shape": "Ring", "X": 0.92, "Y": 0.22, "Radius": 0.06 },
-    { "Device": "fusion2", "Zone": "D_LED2", "Shape": "Ring", "X": 0.07, "Y": 0.2, "Radius": 0.07, "Fans": 3, "FanDy": 0.3 },
+    // D_LED2: the 3 front fans are wired in parallel and mirror one 12-LED ring; sample at the middle fan.
+    { "Device": "fusion2", "Zone": "D_LED2", "Shape": "Ring", "X": 0.07, "Y": 0.5, "Radius": 0.07 },
     { "Device": "fusion2", "Zone": "D_LED3", "Shape": "Ring", "X": 0.3, "Y": 0.92, "Radius": 0.07, "Fans": 3, "FanDx": 0.22 },
     { "Device": "fusion2", "Zone": "onboard", "Shape": "Line", "X": 0.4, "Y": 0.75, "X2": 0.75, "Y2": 0.75 },
     // LINK: ch1 TITAN outer ring around the cooler, ch2 LCD cap inner ring, ch13-15 top radiator fans.
