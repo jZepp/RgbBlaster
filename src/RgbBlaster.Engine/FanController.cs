@@ -4,7 +4,7 @@ namespace RgbBlaster.Engine;
 
 /// <summary>
 /// Applies temperature curves to fan channels. Call <see cref="Tick"/> about once per second from one thread.
-/// Each curve reads its hottest sensor, looks up the target duty, and moves toward it at the configured rise and fall
+/// Each curve reads its hottest sensor, averages it over <see cref="FanCurveConfig.AverageSeconds"/>, looks up the target duty, and moves toward it at the configured rise and fall
 /// rates. With no reading, the curve goes straight to its failsafe duty.
 /// </summary>
 public sealed class FanController
@@ -16,6 +16,8 @@ public sealed class FanController
         public float? Duty;
         public byte? Sent;
         public float? LastTemp;
+        public double Clock;
+        public readonly Queue<(double At, float Temp)> Samples = new();
     }
 
     private readonly List<Curve> _curves = [];
@@ -51,6 +53,14 @@ public sealed class FanController
             foreach (var s in c.Cfg.Sensors)
                 if (_temps.ReadCelsius(s) is float t && !float.IsNaN(t))
                     temp = temp is null ? t : Math.Max(temp.Value, t);
+            c.Clock += dtSeconds;
+            if (temp is null) c.Samples.Clear();
+            else
+            {
+                c.Samples.Enqueue((c.Clock, temp.Value));
+                while (c.Samples.Count > 1 && c.Samples.Peek().At <= c.Clock - c.Cfg.AverageSeconds) c.Samples.Dequeue();
+                temp = c.Samples.Average(x => x.Temp);
+            }
             c.LastTemp = temp;
 
             float duty;

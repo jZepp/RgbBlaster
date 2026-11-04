@@ -10,6 +10,7 @@ namespace RgbBlaster.Drivers.EVision;
 /// Lighting for EVision keyboards (Redragon K580). The keyboard has no streaming mode: it stores every custom-color and
 /// config write and briefly blanks all lighting while it does. So:
 /// <list type="bullet">
+/// <item>At most one stored write per <see cref="StoredWriteIntervalMs"/>; later writes wait.</item>
 /// <item>Effects with a firmware equivalent (<see cref="INativeEffectDevice"/>) run in firmware; frames are ignored.</item>
 /// <item>Otherwise key colors are written only after the frame holds for <see cref="KeySettleMs"/>, so only static colors show.</item>
 /// <item>The side bar (zone 1) shows one of 8 stored palette colors. A new entry is written after it holds for
@@ -22,13 +23,19 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
     public const int KeySettleMs = 500;
     /// <summary>A side-bar palette entry is written only after it stays the same for this time.</summary>
     public const int SideSettleMs = 2000;
+    /// <summary>
+    /// Hard cap: at most one stored write (mode, side bar or key colors) per this interval, whatever the effect does.
+    /// The keyboard saves each one to its memory; this bounds wear at 720 writes per hour.
+    /// </summary>
+    public const int StoredWriteIntervalMs = 5000;
     /// <summary>Entry changes within one settle window that hand the bar to its built-in wave instead of following the effect.</summary>
     public const int SideUnstableChanges = 3;
     private const int ReplyTimeoutMs = 200;
     private const int SideUnset = -3, SideWave = -2, SideOff = -1;
 
     private readonly IHidTransport _io;
-    private readonly int _keySettleMs, _sideSettleMs;
+    private readonly int _keySettleMs, _sideSettleMs, _storeIntervalMs;
+    private readonly Stopwatch _sinceStore = new();
     private readonly byte[] _out = new byte[P.ReportLength];
     private readonly byte[] _in = new byte[P.ReportLength + 1];
     private readonly byte[] _staged = new byte[P.ColorBufferLength];
@@ -39,7 +46,8 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
     private readonly Stopwatch _pendingAge = Stopwatch.StartNew();
     private bool _sentValid;
 
-    private NativeEffect _nativeRequested, _nativeApplied;
+    private NativeEffect _nativeRequested;
+    private NativeEffect? _nativeApplied;   // null: mode not written yet this session
 
     private Rgb _sideStaged;
     private bool _sideStagedValid;
@@ -49,12 +57,14 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
     private readonly Stopwatch _candidateAge = new();
     private readonly Stopwatch _sideWindow = Stopwatch.StartNew();
 
-    public EVisionKeyboardDevice(IHidTransport io, string name, int keySettleMs = KeySettleMs, int sideSettleMs = SideSettleMs)
+    public EVisionKeyboardDevice(IHidTransport io, string name, int keySettleMs = KeySettleMs, int sideSettleMs = SideSettleMs,
+        int storeIntervalMs = StoredWriteIntervalMs)
     {
         _io = io;
         Name = name;
         _keySettleMs = keySettleMs;
         _sideSettleMs = sideSettleMs;
+        _storeIntervalMs = storeIntervalMs;
         Zones =
         [
             new LedZoneInfo("keys", "Keys", P.LedCount, P.Positions()),
@@ -74,13 +84,10 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
                 yield return new EVisionKeyboardDevice(new HidSharpTransport(d), "Redragon K580");
     }
 
+    /// <summary>Writes nothing: the first Flush sets the mode the running effect needs, so start-up costs one stored write.</summary>
     public void Open()
     {
-        lock (_ioLock)
-        {
-            WriteMode(P.ModeCustom, P.SpeedNormal, Rgb.Black, false);
-            _nativeApplied = NativeEffect.None;
-        }
+        lock (_ioLock) _nativeApplied = null;
     }
 
     public void SetNativeEffect(NativeEffect effect)
@@ -114,26 +121,38 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
         {
             NativeEffect native;
             lock (_stage) native = _nativeRequested;
-            if (native != _nativeApplied) ApplyNative(native);
-            if (native.Kind != NativeEffectKind.None) return;
+            if (native != _nativeApplied)
+            {
+                if (CanStore()) ApplyNative(native);
+                return;
+            }
+            if (native.Kind != NativeEffectKind.None)
+            {
+                // The side bar follows a firmware effect too; written after the mode, once the cap allows.
+                WriteSide(native.Kind == NativeEffectKind.Rainbow ? SideWave : P.SideBarIndex(native.Color) ?? SideOff);
+                return;
+            }
 
             FlushSide();
             FlushKeys();
         }
     }
 
-    /// <summary>Caller holds _ioLock.</summary>
+    /// <summary>True when the stored-write cap allows a write now. Caller holds _ioLock.</summary>
+    private bool CanStore() => !_sinceStore.IsRunning || _sinceStore.ElapsedMilliseconds >= _storeIntervalMs;
+
+    private void Stored() => _sinceStore.Restart();
+
+    /// <summary>Writes the keyboard mode for the effect. Caller holds _ioLock and checked <see cref="CanStore"/>.</summary>
     private void ApplyNative(NativeEffect e)
     {
         switch (e.Kind)
         {
             case NativeEffectKind.Rainbow:
                 WriteMode(P.ModeColorWave, Speed(e.PeriodSeconds), Rgb.White, true);
-                WriteSide(SideWave);
                 break;
             case NativeEffectKind.Breathe:
                 WriteMode(P.ModeBreathing, Speed(e.PeriodSeconds), e.Color, false);
-                WriteSide(P.SideBarIndex(e.Color) ?? SideOff);
                 break;
             default:
                 WriteMode(P.ModeCustom, P.SpeedNormal, Rgb.Black, false);
@@ -160,6 +179,7 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
         if (changed) _pendingAge.Restart();
         if (_pendingAge.ElapsedMilliseconds < _keySettleMs) return;
         if (_sentValid && _pending.AsSpan().SequenceEqual(_sent)) return;
+        if (!CanStore()) return;
 
         for (int off = 0; off < P.ColorBufferLength; off += P.MaxColorBytes)
         {
@@ -170,6 +190,7 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
         }
         _pending.CopyTo(_sent, 0);
         _sentValid = true;
+        Stored();
     }
 
     /// <summary>Writes the side-bar mode and palette index when the chosen entry settled. Caller holds _ioLock.</summary>
@@ -204,12 +225,13 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
 
     private void WriteSide(int state)
     {
-        if (state == _sideSent) return;
+        if (state == _sideSent || !CanStore()) return;
         if (state == SideOff) WriteConfig(P.SideBarModeAddress, [P.SideBarModeOff]);
         else if (state == SideWave) WriteConfig(P.SideBarModeAddress, [P.SideBarModeWave]);
         else WriteConfig(P.SideBarModeAddress, [P.SideBarModeStatic, 0x00, (byte)state]);
         _sideSent = state;
         _sentValid = false; // the config write reloads the keyboard's lighting; resend all keys
+        Stored();
     }
 
     /// <summary>Caller holds _ioLock.</summary>
@@ -221,6 +243,7 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
         Exchange();
         P.Control(_out, P.CmdEnd);
         Exchange();
+        Stored();
     }
 
     /// <summary>Diagnostic, read-only: returns the full reply to a config read (begin, read, end).</summary>

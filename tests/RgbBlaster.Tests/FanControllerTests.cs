@@ -29,6 +29,7 @@ public class FanControllerTests
         Fans = [.. fans],
         RisePercentPerSecond = 10,
         FallPercentPerSecond = 2,
+        AverageSeconds = 0,
     };
 
     [Fact]
@@ -77,5 +78,20 @@ public class FanControllerTests
         var ctl = new FanController([Curve("a", "missing"), Curve("a")], [a], new FakeTemps());
         Assert.Contains(ctl.Warnings, w => w.Contains("missing"));
         Assert.Contains(ctl.Warnings, w => w.Contains("already"));
+    }
+
+    [Fact]
+    public void AveragesTemperatureOverWindowSoSpikesAreDamped()
+    {
+        var fan = new FakeFan("board1");
+        var temps = new FakeTemps { Values = { ["cpu"] = 40 } };
+        var curve = Curve("board1");
+        curve.AverageSeconds = 10;
+        curve.RisePercentPerSecond = 100;
+        var ctl = new FanController([curve], [fan], temps);
+        for (int i = 0; i < 9; i++) ctl.Tick(1);             // window holds nine 40 C samples
+        temps.Values["cpu"] = 80;                            // one-second spike
+        ctl.Tick(1);
+        Assert.Equal(37, fan.Sets.Last());                   // mean 44 C -> 37 %, not 100 %
     }
 }

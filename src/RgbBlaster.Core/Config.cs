@@ -66,6 +66,11 @@ public sealed class FanCurveConfig
     public List<FanCurvePoint> Points { get; set; } = [];
     /// <summary>Fan channel ids, as listed at "run" start (for example board1, ch13).</summary>
     public List<string> Fans { get; set; } = [];
+    /// <summary>
+    /// The curve uses the mean temperature of this many past seconds, so short spikes (Ryzen Tctl jumps 5-12 C on brief loads)
+    /// do not change fan speed. 0 or less uses the latest reading only.
+    /// </summary>
+    public float AverageSeconds { get; set; } = 10;
     /// <summary>Largest duty rise per second. Rising is fast so a load spike is met quickly.</summary>
     public float RisePercentPerSecond { get; set; } = 10;
     /// <summary>Largest duty fall per second. Falling is slow so short load dips do not make the fans hunt.</summary>

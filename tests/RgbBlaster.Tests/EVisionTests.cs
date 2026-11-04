@@ -20,11 +20,24 @@ public class EVisionTests
 {
     private static ushort Sum(byte[] p) { ushort s = 0; for (int i = 3; i < 64; i++) s += p[i]; return s; }
 
+    /// <summary>Opened keyboard after its first Flush (custom mode written), with the write log cleared.</summary>
+    private static EVisionKeyboardDevice Opened(FakeEVision hw, int keySettleMs = 0, int sideSettleMs = 0, int storeIntervalMs = 0)
+    {
+        var dev = new EVisionKeyboardDevice(hw, "K580", keySettleMs, sideSettleMs, storeIntervalMs);
+        dev.Open();
+        dev.Flush();
+        hw.Writes.Clear();
+        return dev;
+    }
+
     [Fact]
-    public void OpenEntersCustomModeBetweenBeginAndEnd()
+    public void OpenWritesNothingAndFirstFlushEntersCustomMode()
     {
         var hw = new FakeEVision();
-        new EVisionKeyboardDevice(hw, "K580").Open();
+        var dev = new EVisionKeyboardDevice(hw, "K580");
+        dev.Open();
+        Assert.Empty(hw.Writes);
+        dev.Flush();
         Assert.Equal(3, hw.Writes.Count);
         Assert.Equal([P.ReportId, P.CmdBegin, 0, P.CmdBegin], hw.Writes[0][..4]);
         var mode = hw.Writes[1];
@@ -39,9 +52,7 @@ public class EVisionTests
     public void KeysAreWrittenOnlyAfterTheFrameSettlesThenOnlyChangedPackets()
     {
         var hw = new FakeEVision();
-        var dev = new EVisionKeyboardDevice(hw, "K580", keySettleMs: 50);
-        dev.Open();
-        hw.Writes.Clear();
+        var dev = Opened(hw, keySettleMs: 50);
         var colors = new Rgb[P.LedCount];
         colors[20] = new Rgb(200, 100, 50); // byte 60: second packet
         dev.SetZone(0, colors);
@@ -69,9 +80,7 @@ public class EVisionTests
     public void NativeRainbowSetsFirmwareWaveOnceAndIgnoresFrames()
     {
         var hw = new FakeEVision();
-        var dev = new EVisionKeyboardDevice(hw, "K580", keySettleMs: 0, sideSettleMs: 0);
-        dev.Open();
-        hw.Writes.Clear();
+        var dev = Opened(hw);
         dev.SetNativeEffect(new NativeEffect(NativeEffectKind.Rainbow, PeriodSeconds: 5));
         dev.SetZone(0, Enumerable.Repeat(Rgb.White, P.LedCount).ToArray());
         dev.SetZone(1, [Rgb.White]);
@@ -87,6 +96,7 @@ public class EVisionTests
         hw.Writes.Clear();
         dev.SetNativeEffect(NativeEffect.None);                               // back to frames
         dev.Flush();
+        dev.Flush();
         Assert.Equal(P.ModeCustom, hw.Writes.Single(w => w[3] == P.CmdSetParameter && w[5] == 0)[8]);
         Assert.Equal(7, hw.Writes.Count(w => w[3] == P.CmdWriteColors));
     }
@@ -95,10 +105,9 @@ public class EVisionTests
     public void NativeBreatheUsesColorAndNearestSidePaletteEntry()
     {
         var hw = new FakeEVision();
-        var dev = new EVisionKeyboardDevice(hw, "K580");
-        dev.Open();
-        hw.Writes.Clear();
+        var dev = Opened(hw);
         dev.SetNativeEffect(new NativeEffect(NativeEffectKind.Breathe, new Rgb(0, 0, 255), 4));
+        dev.Flush();
         dev.Flush();
         var mode = hw.Writes.Single(w => w[3] == P.CmdSetParameter && w[5] == 0);
         Assert.Equal([P.ModeBreathing, P.BrightnessMax, EVisionKeyboardDevice.Speed(4), 0, 0, 0, 0, 255], mode[8..16]);
@@ -124,8 +133,7 @@ public class EVisionTests
     public void SideBarWritesSettledEntryOnceAndResendsKeys()
     {
         var hw = new FakeEVision();
-        var dev = new EVisionKeyboardDevice(hw, "K580", keySettleMs: 0, sideSettleMs: 50);
-        dev.Open();
+        var dev = Opened(hw, sideSettleMs: 50);
         dev.SetZone(1, [new Rgb(0, 0, 255)]);
         dev.Flush();
         hw.Writes.Clear();
@@ -151,9 +159,7 @@ public class EVisionTests
     public void ChangingSideColorHandsBarToBuiltInWave()
     {
         var hw = new FakeEVision();
-        var dev = new EVisionKeyboardDevice(hw, "K580", keySettleMs: 0, sideSettleMs: 200);
-        dev.Open();
-        hw.Writes.Clear();
+        var dev = Opened(hw, sideSettleMs: 200);
         Rgb[] seq = [new(255, 0, 0), new(0, 255, 0), new(0, 0, 255), new(255, 0, 0)];
         foreach (var c in seq) { dev.SetZone(1, [c]); dev.Flush(); Thread.Sleep(30); }
         Thread.Sleep(100);
@@ -161,6 +167,25 @@ public class EVisionTests
         dev.Flush();
         var side = hw.Writes.Where(w => w[3] == P.CmdSetParameter).ToList();
         Assert.Equal([P.SideBarModeWave], side.Single()[8..9]);
+    }
+
+    [Fact]
+    public void StoredWritesWaitForTheCapInterval()
+    {
+        var hw = new FakeEVision();
+        var dev = Opened(hw, storeIntervalMs: 200);              // custom mode was just stored
+        dev.SetZone(0, Enumerable.Repeat(Rgb.White, P.LedCount).ToArray());
+        dev.Flush();
+        Assert.Empty(hw.Writes);                                 // within the cap: keys wait
+
+        Thread.Sleep(210);
+        dev.Flush();
+        Assert.Equal(7, hw.Writes.Count(w => w[3] == P.CmdWriteColors));
+
+        hw.Writes.Clear();
+        dev.SetNativeEffect(new NativeEffect(NativeEffectKind.Rainbow, PeriodSeconds: 5));
+        dev.Flush();
+        Assert.Empty(hw.Writes);                                 // mode change waits too
     }
 
     [Fact]
