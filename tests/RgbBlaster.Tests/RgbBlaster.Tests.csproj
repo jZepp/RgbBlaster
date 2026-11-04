@@ -22,6 +22,10 @@
     <ProjectReference Include="..\..\src\RgbBlaster.Core\RgbBlaster.Core.csproj" />
     <ProjectReference Include="..\..\src\RgbBlaster.Engine\RgbBlaster.Engine.csproj" />
     <ProjectReference Include="..\..\src\RgbBlaster.Drivers\RgbBlaster.Drivers.csproj" />
+    <ProjectReference Include="..\..\src\RgbBlaster.Service\RgbBlaster.Service.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="Data\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using RgbBlaster.Core;
 
 namespace RgbBlaster.Engine;
@@ -45,6 +45,27 @@ public sealed class RenderLoop : IDisposable
     public IEffect Effect { get => _effect; set => _effect = value; }
 
     public double LastRenderMs { get; private set; }
+
+    /// <summary>
+    /// Downsampled copy of the current canvas as packed RGB bytes, row by row, for previews.
+    /// Reads the canvas while the render thread may be writing it; a preview can mix two frames.
+    /// </summary>
+    public byte[] Preview(int width, int height)
+    {
+        var src = _canvas.Pixels;
+        var dst = new byte[width * height * 3];
+        for (int y = 0; y < height; y++)
+        {
+            int sy = Math.Min(_canvas.Height - 1, y * _canvas.Height / height);
+            for (int x = 0; x < width; x++)
+            {
+                var c = src[sy * _canvas.Width + Math.Min(_canvas.Width - 1, x * _canvas.Width / width)];
+                int o = (y * width + x) * 3;
+                dst[o] = c.R; dst[o + 1] = c.G; dst[o + 2] = c.B;
+            }
+        }
+        return dst;
+    }
 
     public void Start()
     {

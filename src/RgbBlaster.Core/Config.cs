@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace RgbBlaster.Core;
@@ -15,6 +15,8 @@ public sealed class AppConfig
     public List<BoardFanConfig> BoardFans { get; set; } = [];
     /// <summary>Temperature-based fan curves applied while "run" is active. Fans not in any curve keep their default duty.</summary>
     public List<FanCurveConfig> FanCurves { get; set; } = [];
+    /// <summary>Web GUI and API of the service.</summary>
+    public WebConfig Web { get; set; } = new();
 
     public static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -29,6 +31,13 @@ public sealed class AppConfig
         File.Exists(path)
             ? JsonSerializer.Deserialize<AppConfig>(File.ReadAllText(path), JsonOptions) ?? new AppConfig()
             : new AppConfig();
+}
+
+public sealed class WebConfig
+{
+    public int Port { get; set; } = 27830;
+    /// <summary>False binds to 127.0.0.1 only. True binds to all interfaces; the API has no authentication.</summary>
+    public bool AllowLan { get; set; }
 }
 
 public sealed class Fusion2Config

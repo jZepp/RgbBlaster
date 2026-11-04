@@ -140,12 +140,7 @@ int Run(string[] a)
 
 List<IRgbDevice> OpenAll()
 {
-    var list = new List<IRgbDevice>();
-    foreach (var d in Fusion2Device.Discover(config.Fusion2).Cast<IRgbDevice>().Concat(LinkHubDevice.Discover()).Concat(GigabyteGpuDevice.Discover()).Concat(LogitechMouseDevice.Discover()).Concat(EVisionKeyboardDevice.Discover()))
-    {
-        try { d.Open(); list.Add(d); }
-        catch (Exception ex) { Console.WriteLine($"{d.Name}: open failed: {ex.Message}"); d.Dispose(); }
-    }
+    var list = RgbBlaster.Drivers.DeviceDiscovery.OpenAll(config, Console.WriteLine);
     // Hand devices back to firmware control even if the process dies on an unhandled exception.
     AppDomain.CurrentDomain.UnhandledException += (_, _) => ReleaseAll(list);
     return list;

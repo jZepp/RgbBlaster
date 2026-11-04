@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>rgbblaster-service</AssemblyName>
+    <RootNamespace>RgbBlaster.Service</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\RgbBlaster.Core\RgbBlaster.Core.csproj" />
+    <ProjectReference Include="..\RgbBlaster.Engine\RgbBlaster.Engine.csproj" />
+    <ProjectReference Include="..\RgbBlaster.Drivers\RgbBlaster.Drivers.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting.WindowsServices" Version="10.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- Hardware configuration is shared with the CLI. -->
+    <None Include="..\RgbBlaster.Host\rgbblaster.json" Link="rgbblaster.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="wwwroot\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

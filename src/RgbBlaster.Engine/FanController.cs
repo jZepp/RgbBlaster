@@ -1,4 +1,4 @@
-using RgbBlaster.Core;
+﻿using RgbBlaster.Core;
 
 namespace RgbBlaster.Engine;
 
@@ -85,6 +85,10 @@ public sealed class FanController
         }
     }
 
+    /// <summary>Current state of each active curve.</summary>
+    public IReadOnlyList<FanCurveState> States() =>
+        _curves.Select(c => new FanCurveState(c.Cfg.Name, c.LastTemp, c.Sent, c.Fans.Select(f => f.Id).ToArray())).ToList();
+
     /// <summary>One line per curve: name, temperature, duty.</summary>
     public IEnumerable<string> Status() =>
         _curves.Select(c => $"{c.Cfg.Name} {(c.LastTemp is float t ? $"{t:F0}C" : "no temp")} {c.Sent?.ToString() ?? "-"}%");
@@ -103,3 +107,5 @@ public sealed class FanController
         return p[^1].Duty;
     }
 }
+
+public sealed record FanCurveState(string Name, float? Temp, byte? Duty, IReadOnlyList<string> Fans);

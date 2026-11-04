@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RgbBlaster</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' x2='1'%3E%3Cstop offset='0' stop-color='%2322d3ee'/%3E%3Cstop offset='1' stop-color='%23a855f7'/%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='16' cy='16' r='12' fill='none' stroke='url(%23g)' stroke-width='5'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <aside class="nav">
+    <div class="brand"><span class="logo"></span><span>RgbBlaster</span></div>
+    <nav>
+      <a href="#dashboard" data-page="dashboard"><i class="ic ic-dash"></i>Dashboard</a>
+      <a href="#lighting" data-page="lighting"><i class="ic ic-light"></i>Lighting</a>
+      <a href="#layout" data-page="layout"><i class="ic ic-layout"></i>Layout</a>
+      <a href="#fans" data-page="fans"><i class="ic ic-fan"></i>Fans</a>
+      <a href="#lcd" data-page="lcd"><i class="ic ic-lcd"></i>LCD</a>
+      <a href="#profiles" data-page="profiles"><i class="ic ic-prof"></i>Profiles</a>
+    </nav>
+    <div class="nav-foot" id="conn">Connecting…</div>
+  </aside>
+
+  <main>
+    <header class="top">
+      <h1 id="page-title">Dashboard</h1>
+      <div class="top-right">
+        <span class="badge sim" id="sim-badge" hidden>Simulation</span>
+        <label class="profile-pick">Profile
+          <select id="profile-select"></select>
+        </label>
+      </div>
+    </header>
+
+    <!-- Dashboard -->
+    <section class="page" id="page-dashboard">
+      <div class="grid stats">
+        <div class="card stat"><div class="stat-label">CPU</div><div class="stat-value" id="st-cpu">--</div><div class="stat-sub">Tctl</div></div>
+        <div class="card stat"><div class="stat-label">GPU</div><div class="stat-value" id="st-gpu">--</div><div class="stat-sub">core</div></div>
+        <div class="card stat"><div class="stat-label">Pump</div><div class="stat-value" id="st-pump">--</div><div class="stat-sub">rpm</div></div>
+        <div class="card stat"><div class="stat-label">Render</div><div class="stat-value" id="st-render">--</div><div class="stat-sub">ms per frame</div></div>
+      </div>
+      <div class="grid two">
+        <div class="card">
+          <div class="card-head"><h2>Live lighting</h2><span class="muted" id="dash-effect"></span></div>
+          <div class="case-view" id="dash-case"></div>
+        </div>
+        <div class="card lcd-card">
+          <div class="card-head"><h2>Pump LCD</h2><span class="muted" id="dash-lcd-mode"></span></div>
+          <div class="lcd-round"><img id="dash-lcd" alt="Current LCD frame"></div>
+        </div>
+      </div>
+      <div class="grid two">
+        <div class="card">
+          <div class="card-head"><h2>Temperatures</h2><span class="legend"><span class="key k-cpu"></span>CPU <span class="key k-gpu"></span>GPU</span></div>
+          <svg class="chart" id="temp-chart" viewBox="0 0 600 200" preserveAspectRatio="none"></svg>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Fans</h2></div>
+          <table class="table" id="fan-table"><thead><tr><th>Fan</th><th>Curve</th><th class="r">Duty</th><th class="r">RPM</th></tr></thead><tbody></tbody></table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>Devices</h2></div>
+        <div class="chips" id="device-chips"></div>
+        <details class="log"><summary>Service messages</summary><pre id="messages"></pre></details>
+      </div>
+    </section>
+
+    <!-- Lighting -->
+    <section class="page" id="page-lighting" hidden>
+      <div class="grid side">
+        <div class="card">
+          <div class="card-head"><h2>Effect</h2></div>
+          <div class="effect-grid" id="effect-grid"></div>
+          <div class="params" id="effect-params"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Preview</h2><span class="muted">Case side view: front left, rear right</span></div>
+          <div class="case-view big" id="light-case"></div>
+          <p class="hint">Changes apply live and are saved to the active profile.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Layout -->
+    <section class="page" id="page-layout" hidden>
+      <div class="grid side-wide">
+        <div class="card">
+          <div class="card-head">
+            <h2>Case layout</h2>
+            <div class="btns">
+              <label class="toggle"><input type="checkbox" id="layout-bg" checked> Live effect behind</label>
+              <button class="btn" id="layout-revert">Revert</button>
+              <button class="btn primary" id="layout-save">Save layout</button>
+            </div>
+          </div>
+          <div class="layout-stage" id="layout-stage">
+            <canvas id="layout-canvas"></canvas>
+            <svg id="layout-svg" viewBox="0 0 1000 625"></svg>
+          </div>
+          <p class="hint">Drag a zone to move it. Drag the round handle to resize a ring or move a line end. Effects such as waves and rings travel across this map, so place each light where it sits in the case.</p>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Zones</h2></div>
+          <div id="zone-list" class="zone-list"></div>
+          <div id="zone-edit" class="params"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Fans -->
+    <section class="page" id="page-fans" hidden>
+      <div class="card-head page-actions">
+        <span class="muted">Drag points to change a curve. Double-click the chart to add a point; double-click a point to remove it.</span>
+        <div class="btns">
+          <button class="btn" id="curve-add">Add curve</button>
+          <button class="btn" id="curve-revert">Revert</button>
+          <button class="btn primary" id="curve-save">Save curves</button>
+        </div>
+      </div>
+      <div id="curve-warnings" class="warn" hidden></div>
+      <div id="curves" class="curves"></div>
+    </section>
+
+    <!-- LCD -->
+    <section class="page" id="page-lcd" hidden>
+      <div class="grid side">
+        <div class="card lcd-card">
+          <div class="card-head"><h2>On screen</h2><span class="muted" id="lcd-present"></span></div>
+          <div class="lcd-round big"><img id="lcd-live" alt="Current LCD frame"></div>
+          <div class="params">
+            <label class="field">Brightness <span class="val" id="lcd-bright-val"></span>
+              <input type="range" id="lcd-bright" min="0" max="100" step="5"></label>
+            <div class="field">Rotation
+              <div class="seg" id="lcd-rot"><button data-r="0">0°</button><button data-r="1">90°</button><button data-r="2">180°</button><button data-r="3">270°</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h2>Screens</h2>
+            <label class="btn primary upload">Upload image or GIF<input type="file" id="lcd-file" accept=".png,.jpg,.jpeg,.gif,.bmp" hidden></label>
+          </div>
+          <div class="drop" id="lcd-drop">Drop PNG, JPEG, BMP or animated GIF files here. Images are scaled to fill the round 480 × 480 screen.</div>
+          <div class="gallery" id="lcd-gallery"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Profiles -->
+    <section class="page" id="page-profiles" hidden>
+      <div class="grid side">
+        <div class="card">
+          <div class="card-head"><h2>Profiles</h2></div>
+          <div id="profile-list" class="profile-list"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>Save current settings</h2></div>
+          <p class="muted">A profile holds the lighting effect, fan curves and LCD screen. The case layout is shared by all profiles.</p>
+          <div class="row"><input type="text" id="profile-name" placeholder="Profile name" maxlength="40"><button class="btn primary" id="profile-save">Save as profile</button></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

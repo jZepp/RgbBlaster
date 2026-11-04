@@ -4,6 +4,7 @@
     <Project Path="src/RgbBlaster.Drivers/RgbBlaster.Drivers.csproj" />
     <Project Path="src/RgbBlaster.Engine/RgbBlaster.Engine.csproj" />
     <Project Path="src/RgbBlaster.Host/RgbBlaster.Host.csproj" />
+    <Project Path="src/RgbBlaster.Service/RgbBlaster.Service.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/RgbBlaster.Tests/RgbBlaster.Tests.csproj" />
