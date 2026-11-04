@@ -29,6 +29,12 @@ public sealed class AppConfig
 public sealed class Fusion2Config
 {
     public List<Fusion2HeaderConfig> Headers { get; set; } = [];
+
+    /// <summary>
+    /// Firmware zone numbers (0-10) driven as the "onboard" zone, one static color each. Empty uses the driver default.
+    /// Zones 0-7 use commands 0x20-0x27, zones 8-10 use 0x90-0x92.
+    /// </summary>
+    public List<int> OnboardZones { get; set; } = [];
 }
 
 public enum Fusion2Header { D_LED1, D_LED2, D_LED3, D_LED4, ONBOARD1, ONBOARD2 }

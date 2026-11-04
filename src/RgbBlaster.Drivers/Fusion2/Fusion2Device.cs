@@ -28,9 +28,10 @@ public sealed class Fusion2Device : IRgbDevice
     private readonly IHidTransport _io;
     private readonly ushort _pid;
     private readonly Strip[] _strips;
-    private readonly Rgb[] _onboardStaged = new Rgb[P.OnboardZones.Length];
-    private readonly Rgb[] _onboardSending = new Rgb[P.OnboardZones.Length];
-    private readonly Rgb[] _onboardSent = new Rgb[P.OnboardZones.Length];
+    private readonly int[] _onboardZones;
+    private readonly Rgb[] _onboardStaged;
+    private readonly Rgb[] _onboardSending;
+    private readonly Rgb[] _onboardSent;
     private readonly byte[] _buf = new byte[P.ReportSize];
     private readonly object _stage = new();
     private readonly object _ioLock = new();
@@ -42,9 +43,14 @@ public sealed class Fusion2Device : IRgbDevice
         _io = io;
         _pid = pid;
         Id = id;
+        _onboardZones = config.OnboardZones is { Count: > 0 } oz ? oz.ToArray() : P.OnboardZones;
+        if (_onboardZones.Any(z => z is < 0 or > 10)) throw new ArgumentException("Fusion 2 onboard zones must be 0-10.", nameof(config));
+        _onboardStaged = new Rgb[_onboardZones.Length];
+        _onboardSending = new Rgb[_onboardZones.Length];
+        _onboardSent = new Rgb[_onboardZones.Length];
         _strips = config.Headers.Where(h => h.LedCount > 0).Select(h => new Strip(h)).ToArray();
         var zones = _strips.Select(s => new LedZoneInfo(s.Config.Header.ToString(), s.Config.Name, s.Config.LedCount)).ToList();
-        zones.Add(new LedZoneInfo("onboard", "Onboard zones", P.OnboardZones.Length));
+        zones.Add(new LedZoneInfo("onboard", "Onboard zones", _onboardZones.Length));
         Zones = zones;
     }
 
@@ -170,10 +176,10 @@ public sealed class Fusion2Device : IRgbDevice
 
             if (!_onboardValid || !_onboardSending.AsSpan().SequenceEqual(_onboardSent))
             {
-                for (int i = 0; i < P.OnboardZones.Length; i++)
+                for (int i = 0; i < _onboardZones.Length; i++)
                 {
                     if (_onboardValid && _onboardSending[i] == _onboardSent[i]) continue;
-                    P.StaticZone(_buf, P.OnboardZones[i], _onboardSending[i]);
+                    P.StaticZone(_buf, _onboardZones[i], _onboardSending[i]);
                     _io.SetFeature(_buf);
                 }
                 Send(P.CmdApply, 0xFF, P.ApplyMask(_pid));

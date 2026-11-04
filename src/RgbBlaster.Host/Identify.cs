@@ -22,6 +22,8 @@ internal static class Identify
                 LedCount = ProbeLeds,
                 ColorOrder = config.Fusion2.Headers.FirstOrDefault(c => c.Header == h)?.ColorOrder ?? ColorOrderSetting.Auto,
             }).ToList(),
+            // Every firmware zone, so walk index = zone number and board LEDs outside the default set show up.
+            OnboardZones = [.. Enumerable.Range(0, 11)],
         };
 
         var devices = new List<IRgbDevice>();
