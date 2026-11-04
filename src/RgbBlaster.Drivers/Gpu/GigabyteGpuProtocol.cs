@@ -53,7 +53,8 @@ public static class GigabyteGpuProtocol
     {
         [0x417F] = ("RTX 5070 Ti Aero OC", GpuLayout.SingleZone),
         [0x4180] = ("RTX 5070 Ti Eagle OC", GpuLayout.SingleZone),
-        [0x4181] = ("RTX 5070 Ti Gaming OC", GpuLayout.Gaming),
+        // OpenRGB lists this card with the 4-zone Gaming layout, but on the tested card every zone lit only the side LED.
+        [0x4181] = ("RTX 5070 Ti Gaming OC", GpuLayout.SingleZone),
         [0x4182] = ("RTX 5070 Ti Eagle OC ICE", GpuLayout.SingleZone),
     };
 
