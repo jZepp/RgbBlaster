@@ -11,7 +11,10 @@ namespace RgbBlaster.Tests;
 internal sealed class FakeHid : IHidTransport
 {
     public readonly List<byte[]> Sent = [];
-    public byte[] InfoReply = new byte[64];
+    public byte[] InfoReply = HealthyInfo();
+
+    /// <summary>Firmware 1.0.19.6, as a healthy IT5711 reports.</summary>
+    public static byte[] HealthyInfo() { var r = new byte[64]; r[4] = 1; r[6] = 19; r[7] = 6; return r; }
     public byte[] CalReply = new byte[64];
     private byte _lastCmd;
 
@@ -28,6 +31,14 @@ public class Fusion2ProtocolTests
     [InlineData(1, 0)] [InlineData(32, 0)] [InlineData(33, 1)] [InlineData(64, 1)]
     [InlineData(65, 2)] [InlineData(256, 2)] [InlineData(512, 3)] [InlineData(513, 4)]
     public void CountBucket(int leds, byte expected) => Assert.Equal(expected, P.CountBucket(leds));
+
+    [Fact]
+    public void OpenFailsOnEmptyInfoReport()
+    {
+        var hw = new FakeHid { InfoReply = new byte[64] };
+        var dev = new Fusion2Device(hw, P.PidIt5711, new Fusion2Config());
+        Assert.Throws<IOException>(dev.Open);
+    }
 
     [Fact]
     public void LedCountsPacksNibblesLowEvenHighOdd()

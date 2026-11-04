@@ -99,6 +99,10 @@ public sealed class Fusion2Device : IRgbDevice
     public void Open()
     {
         var info = ReadInfo();
+        // Seen on IT5711 after Gigabyte's Dynamic Lighting component was stopped: the chip answers with an empty
+        // info block and ignores every color write until a full power-off (PSU off), since it runs on standby power.
+        if (info.Firmware == "0.0.0.0" && info.Product.Length == 0)
+            throw new IOException("Fusion 2 controller returned an empty info report and will ignore color writes. Switch the PSU off for 30 s, then boot.");
         lock (_ioLock)
         {
             if (_forceLampArrayOff || (info.SupportFlags & 0x02) != 0) Send(P.CmdLampArray, 0x00);
