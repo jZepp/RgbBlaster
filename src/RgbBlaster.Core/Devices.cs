@@ -40,6 +40,24 @@ public interface IPersistentLighting
     void SaveLightingAndRelease();
 }
 
+public enum NativeEffectKind { None, Rainbow, Breathe }
+
+/// <summary>An effect described as parameters, for devices that can run it in firmware instead of taking frames.</summary>
+public readonly record struct NativeEffect(NativeEffectKind Kind, Rgb Color = default, float PeriodSeconds = 0)
+{
+    public static NativeEffect None => default;
+}
+
+/// <summary>
+/// A device whose frame updates are costly (for example, stored writes) and that can run some effects in firmware.
+/// While a native effect is active, the device ignores frames.
+/// </summary>
+public interface INativeEffectDevice
+{
+    /// <summary>Called when the running effect changes. Takes effect on the next Flush.</summary>
+    void SetNativeEffect(NativeEffect effect);
+}
+
 public interface IFanChannel
 {
     string Id { get; }

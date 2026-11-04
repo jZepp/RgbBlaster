@@ -21,8 +21,11 @@ public static class EVisionProtocol
     public const int MaxColorBytes = 0x36;
     public const int LedCount = 126;
     public const int ColorBufferLength = LedCount * 3; // 7 packets of 54 bytes
+    public const byte ModeColorWave = 0x02;   // firmware wave; with the random flag it is a rainbow
+    public const byte ModeBreathing = 0x05;
     public const byte ModeStatic = 0x06;
-    public const byte ModeCustom = 0x14;
+    public const byte ModeCustom = 0x14;      // per-key colors; the keyboard stores them on every write (visible flash)
+    public const byte SpeedFastest = 0x00, SpeedSlowest = 0x05;
     public const byte BrightnessMax = 0x04;
     public const byte SpeedNormal = 0x03;
 
@@ -83,7 +86,7 @@ public static class EVisionProtocol
     }
 
     /// <summary>Mode parameter block: mode, brightness, speed, direction, random flag, R, G, B.</summary>
-    public static void ModeEx(Span<byte> buf, byte mode, byte brightness, byte speed, Core.Rgb color)
+    public static void ModeEx(Span<byte> buf, byte mode, byte brightness, byte speed, Core.Rgb color, bool randomColor = false)
     {
         buf[..ReportLength].Clear();
         buf[0] = ReportId;
@@ -93,6 +96,7 @@ public static class EVisionProtocol
         buf[8] = mode;
         buf[9] = brightness;
         buf[10] = speed;
+        buf[12] = (byte)(randomColor ? 1 : 0);
         buf[13] = color.R;
         buf[14] = color.G;
         buf[15] = color.B;

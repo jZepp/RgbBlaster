@@ -14,6 +14,7 @@ public sealed class RainbowWaveEffect(float speedHz = 0.2f, float wavelengths = 
     private Rgb[] _column = [];
 
     public string Name => "rainbow";
+    public NativeEffect Native => new(NativeEffectKind.Rainbow, PeriodSeconds: 1f / speedHz);
 
     public void Render(Canvas canvas, double t)
     {
@@ -30,6 +31,7 @@ public sealed class RainbowWaveEffect(float speedHz = 0.2f, float wavelengths = 
 public sealed class BreathingEffect(Rgb color, float periodSeconds = 4f) : IEffect
 {
     public string Name => "breathe";
+    public NativeEffect Native => new(NativeEffectKind.Breathe, color, periodSeconds);
 
     public void Render(Canvas canvas, double t)
     {

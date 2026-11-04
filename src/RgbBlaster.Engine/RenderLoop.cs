@@ -59,8 +59,15 @@ public sealed class RenderLoop : IDisposable
         long frameTicks = Stopwatch.Frequency / _frameRate;
         long next = clock.ElapsedTicks;
 
+        IEffect? notified = null;
         while (_running)
         {
+            if (!ReferenceEquals(notified, _effect))
+            {
+                notified = _effect;
+                foreach (var (dev, _, _) in _targets)
+                    if (dev is INativeEffectDevice n) n.SetNativeEffect(notified.Native);
+            }
             long start = clock.ElapsedTicks;
             _effect.Render(_canvas, (double)start / Stopwatch.Frequency);
             var pixels = _canvas.Pixels;

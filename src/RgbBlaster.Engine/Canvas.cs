@@ -19,4 +19,6 @@ public interface IEffect
     string Name { get; }
     /// <param name="t">Seconds since the effect started.</param>
     void Render(Canvas canvas, double t);
+    /// <summary>The same effect as parameters, for devices that run it in firmware. None if no firmware equivalent.</summary>
+    NativeEffect Native => NativeEffect.None;
 }

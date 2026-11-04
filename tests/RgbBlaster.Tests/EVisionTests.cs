@@ -36,15 +36,19 @@ public class EVisionTests
     }
 
     [Fact]
-    public void FlushWritesSevenChecksummedColorPacketsThenOnlyChangedOnes()
+    public void KeysAreWrittenOnlyAfterTheFrameSettlesThenOnlyChangedPackets()
     {
         var hw = new FakeEVision();
-        var dev = new EVisionKeyboardDevice(hw, "K580");
+        var dev = new EVisionKeyboardDevice(hw, "K580", keySettleMs: 50);
         dev.Open();
         hw.Writes.Clear();
         var colors = new Rgb[P.LedCount];
         colors[20] = new Rgb(200, 100, 50); // byte 60: second packet
         dev.SetZone(0, colors);
+        dev.Flush();
+        Assert.Empty(hw.Writes);                 // frame just changed: not settled
+
+        Thread.Sleep(60);
         dev.Flush();
         Assert.Equal(7, hw.Writes.Count);
         var second = hw.Writes[1];
@@ -52,12 +56,54 @@ public class EVisionTests
         Assert.Equal([200, 100, 50], second[(8 + 6)..(8 + 9)]);
         Assert.All(hw.Writes, w => Assert.Equal(Sum(w), (ushort)(w[1] | w[2] << 8)));
 
-        Thread.Sleep(1000 / EVisionKeyboardDevice.MaxRateHz + 10);
         hw.Writes.Clear();
         colors[125] = Rgb.White; // last packet only
         dev.SetZone(0, colors);
         dev.Flush();
+        Thread.Sleep(60);
+        dev.Flush();
         Assert.Equal(6 * 54, hw.Writes.Single()[5] | hw.Writes.Single()[6] << 8);
+    }
+
+    [Fact]
+    public void NativeRainbowSetsFirmwareWaveOnceAndIgnoresFrames()
+    {
+        var hw = new FakeEVision();
+        var dev = new EVisionKeyboardDevice(hw, "K580", keySettleMs: 0, sideSettleMs: 0);
+        dev.Open();
+        hw.Writes.Clear();
+        dev.SetNativeEffect(new NativeEffect(NativeEffectKind.Rainbow, PeriodSeconds: 5));
+        dev.SetZone(0, Enumerable.Repeat(Rgb.White, P.LedCount).ToArray());
+        dev.SetZone(1, [Rgb.White]);
+        dev.Flush();
+        dev.Flush();
+        var mode = hw.Writes.Where(w => w[3] == P.CmdSetParameter && w[5] == 0).ToList();
+        Assert.Equal(P.ModeColorWave, mode.Single()[8]);
+        Assert.Equal(1, mode.Single()[12]);                                   // random colors = rainbow
+        var side = hw.Writes.Single(w => w[3] == P.CmdSetParameter && w[5] == P.SideBarModeAddress);
+        Assert.Equal(P.SideBarModeWave, side[8]);
+        Assert.DoesNotContain(hw.Writes, w => w[3] == P.CmdWriteColors);
+
+        hw.Writes.Clear();
+        dev.SetNativeEffect(NativeEffect.None);                               // back to frames
+        dev.Flush();
+        Assert.Equal(P.ModeCustom, hw.Writes.Single(w => w[3] == P.CmdSetParameter && w[5] == 0)[8]);
+        Assert.Equal(7, hw.Writes.Count(w => w[3] == P.CmdWriteColors));
+    }
+
+    [Fact]
+    public void NativeBreatheUsesColorAndNearestSidePaletteEntry()
+    {
+        var hw = new FakeEVision();
+        var dev = new EVisionKeyboardDevice(hw, "K580");
+        dev.Open();
+        hw.Writes.Clear();
+        dev.SetNativeEffect(new NativeEffect(NativeEffectKind.Breathe, new Rgb(0, 0, 255), 4));
+        dev.Flush();
+        var mode = hw.Writes.Single(w => w[3] == P.CmdSetParameter && w[5] == 0);
+        Assert.Equal([P.ModeBreathing, P.BrightnessMax, EVisionKeyboardDevice.Speed(4), 0, 0, 0, 0, 255], mode[8..16]);
+        var side = hw.Writes.Single(w => w[3] == P.CmdSetParameter && w[5] == P.SideBarModeAddress);
+        Assert.Equal([P.SideBarModeStatic, 0, 5], side[8..11]);
     }
 
     [Fact]
@@ -78,7 +124,7 @@ public class EVisionTests
     public void SideBarWritesSettledEntryOnceAndResendsKeys()
     {
         var hw = new FakeEVision();
-        var dev = new EVisionKeyboardDevice(hw, "K580", sideSettleMs: 50);
+        var dev = new EVisionKeyboardDevice(hw, "K580", keySettleMs: 0, sideSettleMs: 50);
         dev.Open();
         dev.SetZone(1, [new Rgb(0, 0, 255)]);
         dev.Flush();
@@ -105,7 +151,7 @@ public class EVisionTests
     public void ChangingSideColorHandsBarToBuiltInWave()
     {
         var hw = new FakeEVision();
-        var dev = new EVisionKeyboardDevice(hw, "K580", sideSettleMs: 200);
+        var dev = new EVisionKeyboardDevice(hw, "K580", keySettleMs: 0, sideSettleMs: 200);
         dev.Open();
         hw.Writes.Clear();
         Rgb[] seq = [new(255, 0, 0), new(0, 255, 0), new(0, 0, 255), new(255, 0, 0)];
