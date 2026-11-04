@@ -1,4 +1,4 @@
-using LibreHardwareMonitor.Hardware;
+﻿using LibreHardwareMonitor.Hardware;
 using RgbBlaster.Core;
 
 namespace RgbBlaster.Drivers.SuperIo;
@@ -50,6 +50,17 @@ public sealed class HardwareMonitorSession : ITemperatureSource, IDisposable
             foreach (var s in hw.Sensors.Where(s => s.SensorType == SensorType.Temperature))
                 yield return (s.Identifier.ToString(), hw.Name, s.Name, s.Value);
         }
+    }
+
+    /// <summary>Discrete GPU fan controls and their speed sensors. Set with SetSoftware; return to the card's curve with SetDefault.</summary>
+    public (IReadOnlyList<IControl> Controls, IReadOnlyList<ISensor> Fans) GpuFans()
+    {
+        var gpu = _computer.Hardware.FirstOrDefault(h => h.HardwareType == HardwareType.GpuNvidia);
+        if (gpu is null) return ([], []);
+        gpu.Update();
+        var controls = gpu.Sensors.Where(s => s.SensorType == SensorType.Control && s.Control is not null).Select(s => s.Control).ToList();
+        var fans = gpu.Sensors.Where(s => s.SensorType == SensorType.Fan).ToList();
+        return (controls, fans);
     }
 
     private ISensor? Find(string name)

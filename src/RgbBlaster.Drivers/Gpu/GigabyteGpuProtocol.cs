@@ -1,4 +1,4 @@
-using RgbBlaster.Core;
+﻿using RgbBlaster.Core;
 
 namespace RgbBlaster.Drivers.Gpu;
 
@@ -54,6 +54,7 @@ public static class GigabyteGpuProtocol
         [0x417F] = ("RTX 5070 Ti Aero OC", GpuLayout.SingleZone),
         [0x4180] = ("RTX 5070 Ti Eagle OC", GpuLayout.SingleZone),
         // OpenRGB lists this card with the 4-zone Gaming layout, but on the tested card every zone lit only the side LED.
+        // GIGABYTE Control Center also writes only zone 0 (register 0x16). The fan rings get power only while the fans spin.
         [0x4181] = ("RTX 5070 Ti Gaming OC", GpuLayout.SingleZone),
         [0x4182] = ("RTX 5070 Ti Eagle OC ICE", GpuLayout.SingleZone),
     };

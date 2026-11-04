@@ -1,4 +1,4 @@
-using RgbBlaster.Core;
+﻿using RgbBlaster.Core;
 using P = RgbBlaster.Drivers.Gpu.GigabyteGpuProtocol;
 
 namespace RgbBlaster.Drivers.Gpu;
@@ -117,6 +117,18 @@ public sealed class GigabyteGpuDevice : IRgbDevice, IPersistentLighting
                 P.ColorPacket(_buf, register, mode, hz, hz == hardwareZone ? new Rgb(255, 0, 0) : Rgb.Black);
                 _bus.Write(P.Address, _buf);
             }
+            _sentValid = false;
+        }
+    }
+
+    /// <summary>Diagnostic: writes one packet for one hardware zone and nothing else, so a later write cannot hide the result.</summary>
+    public void ProbeZoneOnly(byte register, int hardwareZone, Rgb color)
+    {
+        byte mode = register == P.RegColor ? P.ModeDirect : P.ModeStatic;
+        lock (_ioLock)
+        {
+            P.ColorPacket(_buf, register, mode, hardwareZone, color);
+            _bus.Write(P.Address, _buf);
             _sentValid = false;
         }
     }

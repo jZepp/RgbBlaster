@@ -1,9 +1,10 @@
-using RgbBlaster.Core;
+﻿using RgbBlaster.Core;
 using RgbBlaster.Drivers.Fusion2;
 using RgbBlaster.Drivers.EVision;
 using RgbBlaster.Drivers.Gpu;
 using RgbBlaster.Drivers.Logitech;
 using RgbBlaster.Drivers.Link;
+using RgbBlaster.Drivers.SuperIo;
 
 /// <summary>Interactive mapping of software zones and fan channels to physical parts.</summary>
 internal static class Identify
@@ -62,7 +63,7 @@ internal static class Identify
                 "lights" => Lights(devices, Rgb.Parse(a.ElementAtOrDefault(1) ?? "FFFFFF")),
                 "fans" => Fans(devices.OfType<LinkHubDevice>().ToList()),
                 "walk" => Walk(devices, a.ElementAtOrDefault(1), a.ElementAtOrDefault(2), a.ElementAtOrDefault(3)),
-                "gpu" => GpuZones(devices.OfType<GigabyteGpuDevice>().FirstOrDefault()),
+                "gpu" => GpuZones(devices.OfType<GigabyteGpuDevice>().FirstOrDefault(), a.ElementAtOrDefault(1), a.ElementAtOrDefault(2) == "single"),
                 _ => Usage(),
             };
         }
@@ -80,7 +81,7 @@ internal static class Identify
             rgbblaster identify lights [RRGGBB]      Light chosen zones (default white)
             rgbblaster identify fans                 Run one LINK channel at 100%, others at 30%
             rgbblaster identify walk <device> <zone> [i,j,..] Light one LED at a time in a zone (e.g. walk link ch1)
-            rgbblaster identify gpu                  Light each GPU hardware zone, live-color then stored-effect register
+            rgbblaster identify gpu [spin%] [single] Light each GPU hardware zone, live-color then stored-effect register; spin% holds the GPU fans at that duty during the walk (admin); single writes only the zone under test
             Flags: --all-zones (board firmware zones 0-10), --lamp-off (force lamp-array mode off)
             """);
         return 2;
@@ -171,15 +172,40 @@ internal static class Identify
     }
 
     /// <summary>Steps through GPU hardware zones 0-7 with the live-color register (0x16), then the stored-effect register (0x12).</summary>
-    private static int GpuZones(GigabyteGpuDevice? gpu)
+    private static int GpuZones(GigabyteGpuDevice? gpu, string? spin, bool single)
     {
         if (gpu is null) { Console.WriteLine("No Gigabyte GPU found."); return 1; }
+        if (spin is null) return GpuZoneSteps(gpu, null, single);
+        byte duty = byte.TryParse(spin.TrimEnd('%'), out var d) ? Math.Min(d, (byte)100) : (byte)60;
+        using var hm = new HardwareMonitorSession();
+        var (controls, _) = hm.GpuFans();
+        Console.WriteLine($"Holding {controls.Count} GPU fan control(s) at {duty}%.");
+        try
+        {
+            foreach (var c in controls) c.SetSoftware(duty);
+            return GpuZoneSteps(gpu, hm, single);
+        }
+        finally
+        {
+            foreach (var c in controls) c.SetDefault();
+            Console.WriteLine("GPU fans handed back to the card's own curve.");
+        }
+    }
+
+    private static int GpuZoneSteps(GigabyteGpuDevice gpu, HardwareMonitorSession? hm, bool single)
+    {
         Console.WriteLine("Each step lights one hardware zone red. Note what lights. Enter = next, q = quit.");
         foreach (var (reg, label) in new[] { (GigabyteGpuProtocol.RegColor, "live 0x16"), (GigabyteGpuProtocol.RegMode, "effect 0x12") })
             for (int hz = 0; hz < 8; hz++)
             {
-                gpu.ProbeZone(reg, hz);
-                Console.Write($"{label} zone {hz} > ");
+                if (!single) gpu.ProbeZone(reg, hz);
+                else
+                {
+                    if (hz > 0) gpu.ProbeZoneOnly(reg, hz - 1, Rgb.Black);
+                    gpu.ProbeZoneOnly(reg, hz, new Rgb(255, 0, 0));
+                }
+                string rpm = hm is null ? "" : "  rpm " + string.Join("/", hm.GpuFans().Fans.Select(f => f.Value?.ToString("F0") ?? "-"));
+                Console.Write($"{label} zone {hz}{rpm} > ");
                 if (Console.ReadLine()?.Trim().ToLowerInvariant() == "q") return 0;
             }
         return 0;

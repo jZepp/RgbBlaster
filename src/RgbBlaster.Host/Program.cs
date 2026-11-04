@@ -25,12 +25,14 @@ switch (cmd)
     case "temps": return Temps();
     case "lcd-test": return LcdTest(args.Skip(1).ToArray());
     case "board-fan-test": return BoardFanTest(args.Skip(1).ToArray());
+    case "gpu-fan-test": return GpuFanTest(args.Skip(1).ToArray());
     default:
         Console.WriteLine("""
             rgbblaster identify lights|fans|walk Map zones and fan channels to physical parts
             rgbblaster info                      Show detected Fusion 2 controllers (reads only)
             rgbblaster board-fans                Super I/O fan RPM, PWM and temperatures (reads only; needs PawnIO, run as admin)
             rgbblaster board-fan-test <ch> [duty%..] Runs one header at each duty for 8 s (default 100 40), then back to BIOS (admin)
+            rgbblaster gpu-fan-test [duty%] [s] Runs the GPU fans at duty (default 60) for s seconds (default 20), then back to the card
             rgbblaster temps                     Every temperature sensor and its id, for fan curves (reads only; admin)
             rgbblaster lcd-test [image]          Shows the status screen (or an image) on the pump LCD for 20 s, then hands it back
             rgbblaster link-info                 LINK hub devices, RPM, temperatures (sets fans 50%, pump 100% while open)
@@ -328,5 +330,34 @@ int LcdTest(string[] a)
     }
     lcd.Release();
     Console.WriteLine("Handed the screen back.");
+    return 0;
+}
+
+int GpuFanTest(string[] a)
+{
+    byte duty = a.Length > 0 && byte.TryParse(a[0].TrimEnd('%'), out var d) ? Math.Min(d, (byte)100) : (byte)60;
+    int seconds = a.Length > 1 && int.TryParse(a[1], out var sec) ? Math.Clamp(sec, 1, 120) : 20;
+    using var hm = new HardwareMonitorSession();
+    var (controls, fans) = hm.GpuFans();
+    if (controls.Count == 0) { Console.WriteLine("No NVIDIA fan control found."); return 1; }
+    using var stop = new ManualResetEventSlim();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Set(); };
+    string Rpm() { var (_, f) = hm.GpuFans(); return string.Join(" ", f.Select(x => $"{x.Name}:{x.Value?.ToString("F0") ?? "-"}")); }
+    Console.WriteLine($"{controls.Count} GPU fan control(s). Before: {Rpm()}");
+    Console.WriteLine($"Setting {duty}% for {seconds} s; Ctrl+C stops.");
+    try
+    {
+        foreach (var c in controls) c.SetSoftware(duty);
+        for (int i = 0; i < seconds && !stop.IsSet; i++)
+        {
+            stop.Wait(1000);
+            Console.WriteLine($"  {i + 1,3}s  {Rpm()}");
+        }
+    }
+    finally
+    {
+        foreach (var c in controls) c.SetDefault();
+        Console.WriteLine("Fans handed back to the card's own curve.");
+    }
     return 0;
 }
