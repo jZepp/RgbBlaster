@@ -11,7 +11,7 @@
       { "Header": "D_LED3", "Name": "Bottom fans (3x, parallel)", "LedCount": 8, "ColorOrder": "Auto" },
       { "Header": "D_LED4", "Name": "Unused (nothing connected)", "LedCount": 0, "ColorOrder": "Auto" }
     ],
-    // Board LEDs: firmware zone 2 lights the bottom of the board (walk onboard --all-zones, 2026-11-04).
+    // Board LEDs: firmware zone 2 is the lighting under the M.2 covers (one color, possibly several LEDs). Zones 0-10 walked 2026-11-04; no other zone lights anything.
     "OnboardZones": [ 2 ]
   },
   // Super I/O (IT8696E) fan headers the app may control; channel numbers as listed by "board-fans".
