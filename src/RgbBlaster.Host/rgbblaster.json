@@ -14,6 +14,11 @@
     // Board LEDs: firmware zone 2 lights the bottom of the board (walk onboard --all-zones, 2026-11-04).
     "OnboardZones": [ 2 ]
   },
+  // Super I/O (IT8696E) fan headers the app may control; channel numbers as listed by "board-fans".
+  // Channel 0 (about 2400 RPM) is on the CPU fan or pump header and is left on the BIOS curve.
+  "BoardFans": [
+    { "Channel": 1, "Name": "Bottom fans (3x, parallel)", "MinDutyPercent": 30 }
+  ],
   "Layout": [
     // Canvas is the case viewed from the side window: x 0 = front, 1 = rear; y 0 = top, 1 = bottom.
     { "Device": "fusion2", "Zone": "D_LED1", "Shape": "Ring", "X": 0.92, "Y": 0.22, "Radius": 0.06 },
