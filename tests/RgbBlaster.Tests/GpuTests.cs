@@ -1,4 +1,4 @@
-using RgbBlaster.Core;
+﻿using RgbBlaster.Core;
 using RgbBlaster.Drivers.Gpu;
 using P = RgbBlaster.Drivers.Gpu.GigabyteGpuProtocol;
 
@@ -35,7 +35,7 @@ public class GpuTests
         dev.Flush();
         Assert.Equal(6, bus.Writes.Count);
         var side = bus.Writes[3];
-        Assert.Equal([P.RegColor, 0x01, P.ModeDirect, 0x00, P.BrightnessMax, 10, 20, 30, 0, 3, 0], side[..11]);
+        Assert.Equal([P.RegColor, 0x01, P.ModeDirect, P.LiveByte3, 0x00, 10, 20, 30, 0, 3, 0], side[..11]);
         Assert.Equal([10, 20, 30], bus.Writes[5][5..8]); // zones past the list take the last zone's color
 
         bus.Writes.Clear();

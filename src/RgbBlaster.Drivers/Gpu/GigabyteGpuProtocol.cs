@@ -20,6 +20,8 @@ public static class GigabyteGpuProtocol
     public const byte ModeDirect = 0x00;
     public const byte ModeStatic = 0x01;
     public const byte BrightnessMax = 0x0A;
+    /// <summary>Byte 3 of every live-color packet GIGABYTE Control Center sends; byte 4 is 0 there.</summary>
+    public const byte LiveByte3 = 0x06;
     public const int HardwareZones = 6;
     public const ushort NvidiaVendor = 0x10DE;
     public const ushort GigabyteSubVendor = 0x1458;
@@ -31,7 +33,15 @@ public static class GigabyteGpuProtocol
         buf[0] = register;
         buf[1] = 0x01;
         buf[2] = mode;
-        buf[4] = BrightnessMax; // byte 3 (speed) stays 0: unused by direct and static
+        if (register == RegColor)
+        {
+            // Live color: the same bytes GIGABYTE Control Center sends (captured from its NVAPI I2C calls).
+            buf[3] = LiveByte3;
+        }
+        else
+        {
+            buf[4] = BrightnessMax; // stored effect: byte 3 (speed) stays 0, unused by static
+        }
         buf[5] = color.R;
         buf[6] = color.G;
         buf[7] = color.B;
@@ -54,7 +64,7 @@ public static class GigabyteGpuProtocol
         [0x417F] = ("RTX 5070 Ti Aero OC", GpuLayout.SingleZone),
         [0x4180] = ("RTX 5070 Ti Eagle OC", GpuLayout.SingleZone),
         // OpenRGB lists this card with the 4-zone Gaming layout, but on the tested card every zone lit only the side LED.
-        // GIGABYTE Control Center also writes only zone 0 (register 0x16). The fan rings get power only while the fans spin.
+        // GIGABYTE Control Center also writes only zone 0 (register 0x16). The fan rings follow zone 0, but get power only while the fans spin.
         [0x4181] = ("RTX 5070 Ti Gaming OC", GpuLayout.SingleZone),
         [0x4182] = ("RTX 5070 Ti Eagle OC ICE", GpuLayout.SingleZone),
     };

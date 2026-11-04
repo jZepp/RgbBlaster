@@ -26,6 +26,7 @@ switch (cmd)
     case "lcd-test": return LcdTest(args.Skip(1).ToArray());
     case "board-fan-test": return BoardFanTest(args.Skip(1).ToArray());
     case "gpu-fan-test": return GpuFanTest(args.Skip(1).ToArray());
+    case "gpu-ring-test": return GpuRingTest(args.Skip(1).ToArray());
     default:
         Console.WriteLine("""
             rgbblaster identify lights|fans|walk Map zones and fan channels to physical parts
@@ -33,6 +34,7 @@ switch (cmd)
             rgbblaster board-fans                Super I/O fan RPM, PWM and temperatures (reads only; needs PawnIO, run as admin)
             rgbblaster board-fan-test <ch> [duty%..] Runs one header at each duty for 8 s (default 100 40), then back to BIOS (admin)
             rgbblaster gpu-fan-test [duty%] [s] Runs the GPU fans at duty (default 60) for s seconds (default 20), then back to the card
+            rgbblaster gpu-ring-test [duty%..]   Steps the GPU fans up (default 0 30 40 50 60 80 100) and blinks the GPU light 1 s on, 1 s off at each step (admin)
             rgbblaster temps                     Every temperature sensor and its id, for fan curves (reads only; admin)
             rgbblaster lcd-test [image]          Shows the status screen (or an image) on the pump LCD for 20 s, then hands it back
             rgbblaster link-info                 LINK hub devices, RPM, temperatures (sets fans 50%, pump 100% while open)
@@ -358,6 +360,49 @@ int GpuFanTest(string[] a)
     {
         foreach (var c in controls) c.SetDefault();
         Console.WriteLine("Fans handed back to the card's own curve.");
+    }
+    return 0;
+}
+
+int GpuRingTest(string[] a)
+{
+    var duties = a.Length > 0
+        ? a.Select(x => byte.TryParse(x.TrimEnd('%'), out var d) ? Math.Min(d, (byte)100) : (byte)255).Where(d => d <= 100).ToArray()
+        : new byte[] { 0, 30, 40, 50, 60, 80, 100 };
+    using var gpu = GigabyteGpuDevice.Discover().FirstOrDefault();
+    if (gpu is null) { Console.WriteLine("No Gigabyte GPU found."); return 1; }
+    using var hm = new HardwareMonitorSession();
+    var (controls, _) = hm.GpuFans();
+    if (controls.Count == 0) { Console.WriteLine("No NVIDIA fan control found."); return 1; }
+    using var stop = new ManualResetEventSlim();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Set(); };
+    string Rpm() => string.Join("/", hm.GpuFans().Fans.Select(f => f.Value?.ToString("F0") ?? "-"));
+    var white = new Rgb(255, 255, 255);
+    Console.WriteLine("Each step: fans at the duty, GPU light 1 s ON, 1 s OFF, 3 times. Watch the fan rings. Ctrl+C stops.");
+    try
+    {
+        foreach (var duty in duties)
+        {
+            foreach (var c in controls) c.SetSoftware(duty);
+            Console.WriteLine($"duty {duty}%: settling 4 s");
+            if (stop.Wait(4000)) break;
+            for (int i = 0; i < 3 && !stop.IsSet; i++)
+            {
+                gpu.ProbeZoneOnly(GigabyteGpuProtocol.RegColor, 0, white);
+                Console.WriteLine($"  duty {duty,3}%  rpm {Rpm(),-14}  light ON");
+                if (stop.Wait(1000)) break;
+                gpu.ProbeZoneOnly(GigabyteGpuProtocol.RegColor, 0, Rgb.Black);
+                Console.WriteLine($"  duty {duty,3}%  rpm {Rpm(),-14}  light OFF");
+                if (stop.Wait(1000)) break;
+            }
+            if (stop.IsSet) break;
+        }
+    }
+    finally
+    {
+        foreach (var c in controls) c.SetDefault();
+        gpu.ProbeZoneOnly(GigabyteGpuProtocol.RegColor, 0, white);
+        Console.WriteLine("GPU fans handed back to the card's own curve; GPU light left white.");
     }
     return 0;
 }
