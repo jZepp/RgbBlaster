@@ -96,6 +96,23 @@ public sealed class EVisionKeyboardDevice : IRgbDevice
         }
     }
 
+    /// <summary>Diagnostic, read-only: returns the full reply to a config read (begin, read, end).</summary>
+    public byte[] ReadConfig(byte address, byte length)
+    {
+        lock (_ioLock)
+        {
+            P.Control(_out, P.CmdBegin);
+            Exchange();
+            P.ReadParameter(_out, address, length);
+            _io.Write(_out);
+            int n = _io.Read(_in, 500);
+            var reply = _in.AsSpan(0, n).ToArray();
+            P.Control(_out, P.CmdEnd);
+            Exchange();
+            return reply;
+        }
+    }
+
     /// <summary>The keyboard has no host mode to leave; it keeps the last custom colors.</summary>
     public void Release() { }
 

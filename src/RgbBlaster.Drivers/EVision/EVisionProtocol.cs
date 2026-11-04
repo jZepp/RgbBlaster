@@ -14,6 +14,7 @@ public static class EVisionProtocol
     public const byte ReportId = 0x04;
     public const byte CmdBegin = 0x01;
     public const byte CmdEnd = 0x02;
+    public const byte CmdReadParameter = 0x05;
     public const byte CmdSetParameter = 0x06;
     public const byte CmdWriteColors = 0x11;
     public const int DataOffset = 8;
@@ -48,6 +49,17 @@ public static class EVisionProtocol
         buf[13] = color.R;
         buf[14] = color.G;
         buf[15] = color.B;
+        Checksum(buf);
+    }
+
+    /// <summary>Requests <paramref name="length"/> config bytes from <paramref name="address"/>; the reply carries them from byte 8.</summary>
+    public static void ReadParameter(Span<byte> buf, byte address, byte length)
+    {
+        buf[..ReportLength].Clear();
+        buf[0] = ReportId;
+        buf[3] = CmdReadParameter;
+        buf[4] = length;
+        buf[5] = address;
         Checksum(buf);
     }
 

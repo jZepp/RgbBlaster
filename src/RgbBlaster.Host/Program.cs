@@ -17,6 +17,7 @@ switch (cmd)
     case "calibrate": return Calibrate(args.Skip(1).ToArray());
     case "link-info": return LinkInfo();
     case "identify": return Identify.Run(args.Skip(1).ToArray(), config);
+    case "keyboard-config": return KeyboardConfig();
     default:
         Console.WriteLine("""
             rgbblaster identify lights|fans|walk Map zones and fan channels to physical parts
@@ -111,6 +112,22 @@ static void ReleaseAll(List<IRgbDevice> devices)
         d.Dispose();
     }
     devices.Clear();
+}
+
+// Read-only: prints the keyboard's config bytes 0x00-0x37 and 0x38-0x6F as the replies return them.
+int KeyboardConfig()
+{
+    var kb = EVisionKeyboardDevice.Discover().FirstOrDefault();
+    if (kb is null) { Console.WriteLine("No EVision keyboard."); return 1; }
+    using (kb)
+        foreach (byte addr in new byte[] { 0x00, 0x38 })
+        {
+            var r = kb.ReadConfig(addr, 0x38);
+            Console.WriteLine($"read 0x{addr:X2}: header {Convert.ToHexString(r.AsSpan(0, 8))}");
+            for (int i = 8; i < r.Length; i += 16)
+                Console.WriteLine($"  +0x{addr + i - 8:X2}: {Convert.ToHexString(r.AsSpan(i, Math.Min(16, r.Length - i)))}");
+        }
+    return 0;
 }
 
 int LinkInfo()
