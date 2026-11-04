@@ -39,6 +39,7 @@ public sealed class LinkHubDevice : IRgbDevice, IFanDevice
     private Rgb[] _sending = [];
     private Rgb[] _sent = [];
     private bool _sentValid;
+    private readonly System.Diagnostics.Stopwatch _sinceSend = new();
     private bool _dutyDirty = true;
     private bool _needSoftwareMode;
     private List<LedZoneInfo> _zones = [];
@@ -109,25 +110,32 @@ public sealed class LinkHubDevice : IRgbDevice, IFanDevice
     }
 
     /// <summary>
-    /// Sends all LEDs in channel order as one color frame when anything changed.
+    /// The hub drops back to its stored lighting when it gets no color frame for a while.
+    /// <see cref="Flush"/> resends an unchanged frame once this interval has passed.
+    /// </summary>
+    public TimeSpan KeepAlive { get; set; } = TimeSpan.FromSeconds(1);
+
+    /// <summary>
+    /// Sends all LEDs in channel order as one color frame when anything changed or <see cref="KeepAlive"/> expired.
     /// Assumption to verify on hardware: the hub expects every LED-capable device, concatenated by channel.
+    /// Safe to call from several threads.
     /// </summary>
     public void Flush()
     {
-        lock (_stage) _staged.CopyTo(_sending, 0);
-        if (_sentValid && _sending.AsSpan().SequenceEqual(_sent)) return;
-
-        var rgb = new byte[_sending.Length * 3];
-        for (int i = 0; i < _sending.Length; i++)
-        {
-            rgb[3 * i] = _sending[i].R;
-            rgb[3 * i + 1] = _sending[i].G;
-            rgb[3 * i + 2] = _sending[i].B;
-        }
-        var frame = L.Frame(L.TypeColor, rgb);
-
         lock (_ioLock)
         {
+            lock (_stage) _staged.CopyTo(_sending, 0);
+            if (_sentValid && _sending.AsSpan().SequenceEqual(_sent) && _sinceSend.Elapsed < KeepAlive) return;
+
+            var rgb = new byte[_sending.Length * 3];
+            for (int i = 0; i < _sending.Length; i++)
+            {
+                rgb[3 * i] = _sending[i].R;
+                rgb[3 * i + 1] = _sending[i].G;
+                rgb[3 * i + 2] = _sending[i].B;
+            }
+            var frame = L.Frame(L.TypeColor, rgb);
+
             EnsureMode();
             Send(L.CmdClose, [L.EpColor]);
             Send(L.CmdOpenColor, [L.EpColor]);
@@ -137,9 +145,10 @@ public sealed class LinkHubDevice : IRgbDevice, IFanDevice
                 Send(pos == 0 ? L.CmdWriteColor : L.CmdWriteColorNext, chunk);
             }
             Send(L.CmdClose, [L.EpColor]);
+            _sending.CopyTo(_sent, 0);
+            _sentValid = true;
+            _sinceSend.Restart();
         }
-        _sending.CopyTo(_sent, 0);
-        _sentValid = true;
     }
 
     private void SetDuty(Channel ch, byte percent)
@@ -225,6 +234,7 @@ public sealed class LinkHubDevice : IRgbDevice, IFanDevice
         if (!_needSoftwareMode) return;
         _needSoftwareMode = false;
         Send(L.CmdSoftwareMode);
+        _sentValid = false; // the hub shows its stored lighting again until it gets a full frame
     }
 
     /// <summary>Writes one command and returns its response without the report ID byte. Caller holds _ioLock.</summary>

@@ -216,6 +216,18 @@ public class LinkHubDeviceTests
     }
 
     [Fact]
+    public void FlushResendsUnchangedFrameAfterKeepAlive()
+    {
+        var hw = Hub();
+        var dev = new LinkHubDevice(hw) { KeepAlive = TimeSpan.Zero };
+        dev.Open();
+        dev.Flush();
+        hw.Writes.Clear();
+        dev.Flush();
+        Assert.Single(hw.Commands(L.CmdWriteColor));
+    }
+
+    [Fact]
     public void LargeColorFrameUsesContinuationPackets()
     {
         var hw2 = new FakeLinkHub { Channels = [(0x05, 0x02, "A"), (0x01, 0x00, "B")] }; // 160 + 34 LEDs = 586 bytes
