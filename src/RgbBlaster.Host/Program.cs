@@ -4,6 +4,7 @@ using RgbBlaster.Drivers.EVision;
 using RgbBlaster.Drivers.Gpu;
 using RgbBlaster.Drivers.Logitech;
 using RgbBlaster.Drivers.Link;
+using RgbBlaster.Drivers.SuperIo;
 using RgbBlaster.Engine;
 
 var configPath = Path.Combine(AppContext.BaseDirectory, "rgbblaster.json");
@@ -19,10 +20,12 @@ switch (cmd)
     case "identify": return Identify.Run(args.Skip(1).ToArray(), config);
     case "keyboard-config": return KeyboardConfig();
     case "keyboard-poke": return KeyboardPoke(args.Skip(1).ToArray());
+    case "board-fans": return BoardFans();
     default:
         Console.WriteLine("""
             rgbblaster identify lights|fans|walk Map zones and fan channels to physical parts
             rgbblaster info                      Show detected Fusion 2 controllers (reads only)
+            rgbblaster board-fans                Super I/O fan RPM, PWM and temperatures (reads only; needs PawnIO, run as admin)
             rgbblaster link-info                 LINK hub devices, RPM, temperatures (sets fans 50%, pump 100% while open)
             rgbblaster run solid <RRGGBB>        Static color on every zone
             rgbblaster run rainbow               Rainbow wave across the canvas
@@ -206,5 +209,13 @@ int Calibrate(string[] a)
         if (Console.ReadLine()?.Trim().ToLowerInvariant() == "q") break;
     }
     dev.Release();
+    return 0;
+}
+
+int BoardFans()
+{
+    int lines = 0;
+    foreach (var line in BoardFanProbe.Report()) { Console.WriteLine(line); lines++; }
+    if (lines == 0) Console.WriteLine("No motherboard sensors found. Install PawnIO and run as administrator.");
     return 0;
 }
