@@ -8,7 +8,7 @@
       // LedCount 0 keeps a header off. Find the real count with "identify walk fusion2 <header>".
       { "Header": "D_LED1", "Name": "Rear fan (Corsair RS120)", "LedCount": 8, "ColorOrder": "Auto" },
       { "Header": "D_LED2", "Name": "Front fans (3x Vetroo SA-140)", "LedCount": 12, "ColorOrder": "Auto" },
-      { "Header": "D_LED3", "Name": "Bottom fans (3x)", "LedCount": 0, "ColorOrder": "Auto" },
+      { "Header": "D_LED3", "Name": "Bottom fans (3x)", "LedCount": 8, "ColorOrder": "Auto" },
       { "Header": "D_LED4", "Name": "CPU block ring", "LedCount": 0, "ColorOrder": "Auto" }
     ]
   },
