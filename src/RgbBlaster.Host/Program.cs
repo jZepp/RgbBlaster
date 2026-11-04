@@ -13,8 +13,10 @@ switch (cmd)
     case "run": return Run(args.Skip(1).ToArray());
     case "calibrate": return Calibrate(args.Skip(1).ToArray());
     case "link-info": return LinkInfo();
+    case "identify": return Identify.Run(args.Skip(1).ToArray(), config);
     default:
         Console.WriteLine("""
+            rgbblaster identify lights|fans|walk Map zones and fan channels to physical parts
             rgbblaster info                      Show detected Fusion 2 controllers (reads only)
             rgbblaster link-info                 LINK hub devices, RPM, temperatures (sets fans 50%, pump 100% while open)
             rgbblaster run solid <RRGGBB>        Static color on every zone

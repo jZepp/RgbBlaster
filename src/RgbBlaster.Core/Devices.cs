@@ -34,6 +34,8 @@ public interface IFanChannel
 {
     string Id { get; }
     string Name { get; }
+    /// <summary>Pump channels have a duty floor and must never stop.</summary>
+    bool IsPump { get; }
     int? ReadRpm();
     void SetDutyPercent(byte percent);
 }
