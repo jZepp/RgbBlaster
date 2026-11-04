@@ -243,7 +243,7 @@ int BoardFanTest(string[] a)
         fan.SetDutyPercent(duty);
         for (int i = 0; i < 8 && !stop.IsSet; i++)
         {
-            Console.WriteLine($"  {duty,3}%  {fan.ReadRpm()?.ToString() ?? "-"} RPM");
+            Console.WriteLine($"  set {duty,3}%  chip {dev.ReadDuty(0)?.ToString("F0") ?? "-",3}%  {fan.ReadRpm()?.ToString() ?? "-"} RPM");
             stop.Wait(1000);
         }
         if (stop.IsSet) break;

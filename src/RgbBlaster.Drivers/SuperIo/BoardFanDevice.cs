@@ -25,6 +25,13 @@ public sealed class BoardFanDevice : IFanDevice, IDisposable
             return rpm?.Value is float f ? (int)f : null;
         }
 
+        /// <summary>PWM duty read back from the chip; null while the BIOS curve controls the header.</summary>
+        public float? ReadDuty()
+        {
+            owner.Update();
+            return control.Value;
+        }
+
         public void SetDutyPercent(byte percent)
         {
             byte duty = Math.Clamp(percent, cfg.MinDutyPercent, (byte)100);
@@ -74,6 +81,9 @@ public sealed class BoardFanDevice : IFanDevice, IDisposable
     }
 
     private void Update() => _chip.Update();
+
+    /// <summary>Diagnostic: PWM duty of fan <paramref name="index"/> read back from the chip.</summary>
+    public float? ReadDuty(int index) => _fans[index].ReadDuty();
 
     /// <summary>Hands every header this app changed back to the BIOS curve.</summary>
     public void Release()
