@@ -44,8 +44,8 @@ public static class HidppProtocol
     /// <summary>0x8070 zone location codes.</summary>
     public static string ZoneName(ushort location) => location switch
     {
-        1 => "Primary",
-        2 => "Logo",
+        1 => "Primary (DPI bar by the thumb on the G502)",
+        2 => "Logo (palm)",
         _ => $"Zone {location}",
     };
 }

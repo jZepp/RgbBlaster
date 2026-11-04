@@ -58,7 +58,7 @@ public class LogitechTests
         var hw = new FakeHidppMouse();
         var dev = new LogitechMouseDevice(hw, "G502");
         dev.Open();
-        Assert.Equal(["Primary", "Logo"], dev.Zones.Select(z => z.Name));
+        Assert.Equal(["Primary (DPI bar by the thumb on the G502)", "Logo (palm)"], dev.Zones.Select(z => z.Name));
         Assert.Equal([0x80, 0x70], hw.Requests[0][4..6]);                  // root lookup of 0x8070
         Assert.Equal([1, 1], hw.Calls(P.FnSoftwareControl).Single()[4..6]);
         Assert.All(hw.Requests, q => Assert.Equal(P.SoftwareId, q[3] & 0x0F));
