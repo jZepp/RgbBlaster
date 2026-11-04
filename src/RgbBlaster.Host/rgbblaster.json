@@ -21,6 +21,22 @@
     { "Channel": 2, "Name": "Front fans (3x Vetroo SA-140, parallel) - SYS_FAN2", "MinDutyPercent": 30 },
     { "Channel": 3, "Name": "Rear fan (Corsair RS120) - SYS_FAN3", "MinDutyPercent": 30 }
   ],
+  // Fan curves for "run". Sensors: "cpu", "gpu", "board:<name>" or an id from "rgbblaster temps"; the hottest one drives the curve.
+  // Fan ids are printed at "run" start: board1-3 are the motherboard headers above, ch13-15 the LINK top radiator fans.
+  "FanCurves": [
+    {
+      "Name": "case",
+      "Sensors": [ "cpu", "gpu" ],
+      "Points": [ { "Temp": 45, "Duty": 30 }, { "Temp": 65, "Duty": 50 }, { "Temp": 78, "Duty": 75 }, { "Temp": 88, "Duty": 100 } ],
+      "Fans": [ "board1", "board2", "board3" ]
+    },
+    {
+      "Name": "radiator",
+      "Sensors": [ "cpu" ],
+      "Points": [ { "Temp": 50, "Duty": 30 }, { "Temp": 70, "Duty": 55 }, { "Temp": 82, "Duty": 80 }, { "Temp": 90, "Duty": 100 } ],
+      "Fans": [ "ch13", "ch14", "ch15" ]
+    }
+  ],
   "Layout": [
     // Canvas is the case viewed from the side window: x 0 = front, 1 = rear; y 0 = top, 1 = bottom.
     { "Device": "fusion2", "Zone": "D_LED1", "Shape": "Ring", "X": 0.92, "Y": 0.22, "Radius": 0.06 },

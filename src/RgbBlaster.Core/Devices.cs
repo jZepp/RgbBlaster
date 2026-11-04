@@ -68,6 +68,12 @@ public interface IFanChannel
     void SetDutyPercent(byte percent);
 }
 
+public interface ITemperatureSource
+{
+    /// <summary>Temperature in °C, or null when the sensor is missing or has no reading.</summary>
+    float? ReadCelsius(string sensor);
+}
+
 public interface IFanDevice
 {
     IReadOnlyList<IFanChannel> Fans { get; }

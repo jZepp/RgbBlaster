@@ -6,6 +6,7 @@ namespace RgbBlaster.Drivers.SuperIo;
 /// <summary>
 /// Motherboard fan headers on the Super I/O chip, through LibreHardwareMonitorLib (needs PawnIO and an elevated process).
 /// Only headers listed in config are exposed. Each set duty is raised to the header's minimum, so a header never stalls.
+/// Opened through <see cref="HardwareMonitorSession"/>, which owns the library instance.
 /// <see cref="Release"/> and <see cref="Dispose"/> hand every header back to the BIOS curve. If the process dies without
 /// them, a header keeps its last duty until reboot.
 /// </summary>
@@ -47,13 +48,12 @@ public sealed class BoardFanDevice : IFanDevice, IDisposable
         }
     }
 
-    private readonly Computer _computer;
     private readonly IHardware _chip;
     private readonly List<Channel> _fans = [];
 
-    private BoardFanDevice(Computer computer, IHardware chip, IEnumerable<BoardFanConfig> config)
+    /// <summary>Use <see cref="HardwareMonitorSession.OpenBoardFans"/>.</summary>
+    internal BoardFanDevice(IHardware chip, IEnumerable<BoardFanConfig> config)
     {
-        _computer = computer;
         _chip = chip;
         chip.Update();
         foreach (var c in config)
@@ -68,18 +68,6 @@ public sealed class BoardFanDevice : IFanDevice, IDisposable
     public string Name => _chip.Name;
     public IReadOnlyList<IFanChannel> Fans => _fans;
 
-    /// <summary>Opens the first Super I/O chip. Returns null when no chip is reachable or no header is configured.</summary>
-    public static BoardFanDevice? Open(IReadOnlyList<BoardFanConfig> config)
-    {
-        if (config.Count == 0) return null;
-        var computer = new Computer { IsMotherboardEnabled = true };
-        computer.Open();
-        var chip = computer.Hardware.SelectMany(h => h.SubHardware).FirstOrDefault(h => h.HardwareType == HardwareType.SuperIO);
-        if (chip is null) { computer.Close(); return null; }
-        try { return new BoardFanDevice(computer, chip, config); }
-        catch { computer.Close(); throw; }
-    }
-
     private void Update() => _chip.Update();
 
     /// <summary>Diagnostic: PWM duty of fan <paramref name="index"/> read back from the chip.</summary>
@@ -91,9 +79,5 @@ public sealed class BoardFanDevice : IFanDevice, IDisposable
         foreach (var f in _fans) f.Restore();
     }
 
-    public void Dispose()
-    {
-        Release();
-        _computer.Close();
-    }
+    public void Dispose() => Release();
 }

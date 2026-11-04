@@ -21,6 +21,7 @@ switch (cmd)
     case "keyboard-config": return KeyboardConfig();
     case "keyboard-poke": return KeyboardPoke(args.Skip(1).ToArray());
     case "board-fans": return BoardFans();
+    case "temps": return Temps();
     case "board-fan-test": return BoardFanTest(args.Skip(1).ToArray());
     default:
         Console.WriteLine("""
@@ -28,6 +29,7 @@ switch (cmd)
             rgbblaster info                      Show detected Fusion 2 controllers (reads only)
             rgbblaster board-fans                Super I/O fan RPM, PWM and temperatures (reads only; needs PawnIO, run as admin)
             rgbblaster board-fan-test <ch> [duty%..] Runs one header at each duty for 8 s (default 100 40), then back to BIOS (admin)
+            rgbblaster temps                     Every temperature sensor and its id, for fan curves (reads only; admin)
             rgbblaster link-info                 LINK hub devices, RPM, temperatures (sets fans 50%, pump 100% while open)
             rgbblaster run solid <RRGGBB>        Static color on every zone
             rgbblaster run rainbow               Rainbow wave across the canvas
@@ -77,21 +79,38 @@ int Run(string[] a)
     using var done = new ManualResetEventSlim();
     Console.CancelKeyPress += (_, e) => { e.Cancel = true; done.Set(); };
 
+    // Fans: LINK hub channels plus motherboard headers (needs PawnIO and admin), driven by the configured curves.
+    using var hm = new HardwareMonitorSession();
+    BoardFanDevice? board = null;
+    try { board = hm.OpenBoardFans(config.BoardFans); }
+    catch (Exception ex) { Console.WriteLine($"Board fans: {ex.Message}"); }
+    if (config.BoardFans.Count > 0 && board is null) Console.WriteLine("Board fans: no Super I/O access (install PawnIO, run as administrator). They stay on the BIOS curve.");
+    AppDomain.CurrentDomain.UnhandledException += (_, _) => board?.Release();
+    var fans = hubs.SelectMany(h => h.Fans).Concat(board?.Fans ?? []).ToList();
+    Console.WriteLine("Fans: " + string.Join(", ", fans.Select(f => $"{f.Id} ({f.Name})")));
+    var fanCtl = new FanController(config.FanCurves, fans, hm);
+    foreach (var w in fanCtl.Warnings) Console.WriteLine($"Fan curves: {w}");
+
     using (var loop = new RenderLoop(config, devices, effect))
     {
         loop.Start();
         Console.WriteLine($"Running '{effect.Name}' at {config.FrameRate} fps on {devices.Count} device(s). Ctrl+C to stop.");
+        var tick = System.Diagnostics.Stopwatch.StartNew();
         while (!done.Wait(1000))
         {
+            try { fanCtl.Tick(tick.Elapsed.TotalSeconds); }
+            catch (Exception ex) { Console.WriteLine($"Fan curves: {ex.Message}"); }
+            tick.Restart();
             foreach (var h in hubs)
             {
                 try { h.Poll(); }
                 catch (Exception ex) { Console.WriteLine($"LINK poll: {ex.Message}"); }
             }
-            var rpm = string.Join(" ", hubs.SelectMany(h => h.Fans).Select(f => $"{f.Id}:{f.ReadRpm()?.ToString() ?? "-"}"));
-            Console.WriteLine($"render {loop.LastRenderMs:F2} ms  {rpm}");
+            var rpm = string.Join(" ", fans.Select(f => $"{f.Id}:{f.ReadRpm()?.ToString() ?? "-"}"));
+            Console.WriteLine($"render {loop.LastRenderMs:F2} ms  {string.Join("  ", fanCtl.Status())}  {rpm}");
         }
     }
+    board?.Release();
 
     ExitLightingRunner.Apply(devices, config.OnExit);
     return 0;
@@ -234,7 +253,8 @@ int BoardFanTest(string[] a)
     if (steps.Length == 0) steps = [100, 40];
     using var stop = new ManualResetEventSlim();
     Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Set(); };
-    using var dev = BoardFanDevice.Open([new BoardFanConfig { Channel = ch, MinDutyPercent = Math.Min((byte)30, steps.Min()) }]);
+    using var hm = new HardwareMonitorSession();
+    using var dev = hm.OpenBoardFans([new BoardFanConfig { Channel = ch, MinDutyPercent = Math.Min((byte)30, steps.Min()) }]);
     if (dev is null) { Console.WriteLine("No Super I/O chip. Install PawnIO and run as administrator."); return 1; }
     var fan = dev.Fans[0];
     Console.WriteLine($"{dev.Name} channel {ch}. Ctrl+C restores the BIOS curve.");
@@ -251,5 +271,15 @@ int BoardFanTest(string[] a)
     dev.Release();
     Thread.Sleep(1500);
     Console.WriteLine($"  BIOS  {fan.ReadRpm()?.ToString() ?? "-"} RPM (restored)");
+    return 0;
+}
+
+int Temps()
+{
+    using var hm = new HardwareMonitorSession();
+    foreach (var (id, hw, name, v) in hm.Temperatures())
+        Console.WriteLine($"{(v is float f ? $"{f,5:F1} C" : "    -  ")}  {hw} / {name}  [{id}]");
+    foreach (var s in new[] { "cpu", "gpu" })
+        Console.WriteLine($"\"{s}\" reads {(hm.ReadCelsius(s) is float t ? $"{t:F1} C" : "nothing")}");
     return 0;
 }

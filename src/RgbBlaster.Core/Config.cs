@@ -13,6 +13,8 @@ public sealed class AppConfig
     public ExitLighting OnExit { get; set; } = ExitLighting.SaveLast;
     /// <summary>Motherboard fan headers the app may control. Headers not listed stay on the BIOS curve.</summary>
     public List<BoardFanConfig> BoardFans { get; set; } = [];
+    /// <summary>Temperature-based fan curves applied while "run" is active. Fans not in any curve keep their default duty.</summary>
+    public List<FanCurveConfig> FanCurves { get; set; } = [];
 
     public static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -53,6 +55,29 @@ public sealed class BoardFanConfig
     public string Name { get; set; } = "";
     /// <summary>Lowest duty the app sets. Requests below it are raised to it, so the fans never stall.</summary>
     public byte MinDutyPercent { get; set; } = 30;
+}
+
+public sealed class FanCurveConfig
+{
+    public string Name { get; set; } = "";
+    /// <summary>Sensors read each second; the curve uses the hottest. See HardwareMonitorSession.ReadCelsius for names.</summary>
+    public List<string> Sensors { get; set; } = ["cpu"];
+    /// <summary>Temperature to duty points, interpolated linearly and held flat beyond the ends.</summary>
+    public List<FanCurvePoint> Points { get; set; } = [];
+    /// <summary>Fan channel ids, as listed at "run" start (for example board1, ch13).</summary>
+    public List<string> Fans { get; set; } = [];
+    /// <summary>Largest duty rise per second. Rising is fast so a load spike is met quickly.</summary>
+    public float RisePercentPerSecond { get; set; } = 10;
+    /// <summary>Largest duty fall per second. Falling is slow so short load dips do not make the fans hunt.</summary>
+    public float FallPercentPerSecond { get; set; } = 2;
+    /// <summary>Duty used while no sensor gives a reading.</summary>
+    public byte FailsafePercent { get; set; } = 100;
+}
+
+public sealed class FanCurvePoint
+{
+    public float Temp { get; set; }
+    public byte Duty { get; set; }
 }
 
 /// <summary>What the lights show after the app exits.</summary>
