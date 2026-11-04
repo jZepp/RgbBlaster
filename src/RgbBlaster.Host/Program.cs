@@ -27,7 +27,7 @@ switch (cmd)
             rgbblaster identify lights|fans|walk Map zones and fan channels to physical parts
             rgbblaster info                      Show detected Fusion 2 controllers (reads only)
             rgbblaster board-fans                Super I/O fan RPM, PWM and temperatures (reads only; needs PawnIO, run as admin)
-            rgbblaster board-fan-test <channel>  Runs one header at 100% then 40%, then hands it back to the BIOS (admin)
+            rgbblaster board-fan-test <ch> [duty%..] Runs one header at each duty for 8 s (default 100 40), then back to BIOS (admin)
             rgbblaster link-info                 LINK hub devices, RPM, temperatures (sets fans 50%, pump 100% while open)
             rgbblaster run solid <RRGGBB>        Static color on every zone
             rgbblaster run rainbow               Rainbow wave across the canvas
@@ -226,16 +226,19 @@ int BoardFanTest(string[] a)
 {
     if (!int.TryParse(a.FirstOrDefault(), out int ch) || ch < 1 || ch > 5)
     {
-        Console.WriteLine("Usage: board-fan-test <channel 1-5>. Channel 0 (CPU_FAN) is refused.");
+        Console.WriteLine("Usage: board-fan-test <channel 1-5> [duty% ...]. Channel 0 (CPU_FAN) is refused.");
         return 2;
     }
+    var steps = a.Skip(1).Select(x => byte.TryParse(x.TrimEnd('%'), out var d) ? Math.Min(d, (byte)100) : (byte)255).ToArray();
+    if (steps.Contains((byte)255)) { Console.WriteLine("Duties are 0-100."); return 2; }
+    if (steps.Length == 0) steps = [100, 40];
     using var stop = new ManualResetEventSlim();
     Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Set(); };
-    using var dev = BoardFanDevice.Open([new BoardFanConfig { Channel = ch, MinDutyPercent = 30 }]);
+    using var dev = BoardFanDevice.Open([new BoardFanConfig { Channel = ch, MinDutyPercent = Math.Min((byte)30, steps.Min()) }]);
     if (dev is null) { Console.WriteLine("No Super I/O chip. Install PawnIO and run as administrator."); return 1; }
     var fan = dev.Fans[0];
     Console.WriteLine($"{dev.Name} channel {ch}. Ctrl+C restores the BIOS curve.");
-    foreach (byte duty in new byte[] { 100, 40 })
+    foreach (byte duty in steps)
     {
         fan.SetDutyPercent(duty);
         for (int i = 0; i < 8 && !stop.IsSet; i++)
