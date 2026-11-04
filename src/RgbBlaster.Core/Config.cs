@@ -10,6 +10,7 @@ public sealed class AppConfig
     public int CanvasHeight { get; set; } = 200;
     public Fusion2Config Fusion2 { get; set; } = new();
     public List<ZonePlacement> Layout { get; set; } = [];
+    public ExitLighting OnExit { get; set; } = ExitLighting.SaveLast;
 
     public static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -41,6 +42,17 @@ public sealed class Fusion2Config
     /// The command takes the board out of Windows Dynamic Lighting control.
     /// </summary>
     public bool ForceLampArrayOff { get; set; }
+}
+
+/// <summary>What the lights show after the app exits.</summary>
+public enum ExitLighting
+{
+    /// <summary>Devices run their stored firmware effects.</summary>
+    Firmware,
+    /// <summary>Everything is set black. Devices may return to their stored effects after their own timeout.</summary>
+    Off,
+    /// <summary>Devices that can store lighting keep the last colors. Others hold them until their own timeout.</summary>
+    SaveLast,
 }
 
 public enum Fusion2Header { D_LED1, D_LED2, D_LED3, D_LED4, ONBOARD1, ONBOARD2 }

@@ -30,6 +30,15 @@ public interface IRgbDevice : IDisposable
     void Release();
 }
 
+/// <summary>A device that can store colors as its own power-on lighting, used when the app is not running.</summary>
+public interface IPersistentLighting
+{
+    bool CanSaveLighting { get; }
+
+    /// <summary>Stores the last flushed colors as the device's own lighting, then returns control to its firmware.</summary>
+    void SaveLightingAndRelease();
+}
+
 public interface IFanChannel
 {
     string Id { get; }

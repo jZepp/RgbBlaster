@@ -11,7 +11,7 @@ namespace RgbBlaster.Drivers.Fusion2;
 /// Zones: one per configured D_LED/ONBOARD addressable header, plus "onboard" (one slot per single-color board zone).
 /// Only 19-LED chunks whose bytes changed are sent. A full refresh runs once per second so a dropped report self-heals.
 /// </summary>
-public sealed class Fusion2Device : IRgbDevice
+public sealed class Fusion2Device : IRgbDevice, IPersistentLighting
 {
     private sealed class Strip(Fusion2HeaderConfig cfg)
     {
@@ -213,6 +213,47 @@ public sealed class Fusion2Device : IRgbDevice
             Send(P.CmdDisableBuiltin, 0x00);
             Send(P.CmdApply, 0xFF, P.ApplyMask(_pid));
         }
+    }
+
+    public bool CanSaveLighting => Info is { } i && (i.SupportFlags & P.FlagPersistent) != 0;
+
+    /// <summary>
+    /// Stores each header's average lit color as a static firmware effect, re-enables the firmware effects and saves to flash.
+    /// Onboard zones keep the static colors already sent. Without flash support the colors last until power-off.
+    /// </summary>
+    public void SaveLightingAndRelease()
+    {
+        lock (_ioLock)
+        {
+            lock (_stage)
+                foreach (var s in _strips) s.Staged.CopyTo(s.Sending, 0);
+
+            foreach (var s in _strips)
+            {
+                P.StaticZone(_buf, P.EffectZone(s.Config.Header), Average(s.Sending));
+                _io.SetFeature(_buf);
+            }
+            Send(P.CmdDisableBuiltin, 0x00);
+            Send(P.CmdApply, 0xFF, P.ApplyMask(_pid));
+            if (CanSaveLighting)
+            {
+                Send(P.CmdPersistent, 0x01);
+                Thread.Sleep(20);
+                Send(P.CmdSaveFlash, 0x00);
+            }
+        }
+    }
+
+    /// <summary>Average of the lit LEDs, so unused LEDs past the end of a strip do not dim the stored color.</summary>
+    private static Rgb Average(ReadOnlySpan<Rgb> leds)
+    {
+        int r = 0, g = 0, b = 0, n = 0;
+        foreach (var c in leds)
+        {
+            if (c == Rgb.Black) continue;
+            r += c.R; g += c.G; b += c.B; n++;
+        }
+        return n == 0 ? Rgb.Black : new Rgb((byte)(r / n), (byte)(g / n), (byte)(b / n));
     }
 
     private void Send(byte a, byte b = 0, byte c = 0)

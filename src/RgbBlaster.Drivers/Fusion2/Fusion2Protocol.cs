@@ -27,6 +27,9 @@ public static class Fusion2Protocol
     public const byte CmdDisableBuiltin = 0x32;
     public const byte CmdLedCount = 0x34;
     public const byte CmdLampArray = 0x48;
+    public const byte CmdPersistent = 0x47;
+    public const byte CmdSaveFlash = 0x5E;
+    public const byte FlagPersistent = 0x01;
 
     /// <summary>Single-color onboard zones that do not alias the D_LED header indices 5..8.</summary>
     public static readonly int[] OnboardZones = [0, 1, 2, 3, 4, 9, 10];
@@ -51,6 +54,18 @@ public static class Fusion2Protocol
         Fusion2Header.D_LED4 => 0x10,
         Fusion2Header.ONBOARD1 => 0x20,
         Fusion2Header.ONBOARD2 => 0x40,
+        _ => throw new ArgumentOutOfRangeException(nameof(h)),
+    };
+
+    /// <summary>Effect zone (for <see cref="StaticZone"/>) that holds a header's firmware effect.</summary>
+    public static int EffectZone(Fusion2Header h) => h switch
+    {
+        Fusion2Header.D_LED1 => 5,
+        Fusion2Header.D_LED2 => 6,
+        Fusion2Header.D_LED3 => 7,
+        Fusion2Header.D_LED4 => 8,
+        Fusion2Header.ONBOARD1 => 9,
+        Fusion2Header.ONBOARD2 => 10,
         _ => throw new ArgumentOutOfRangeException(nameof(h)),
     };
 

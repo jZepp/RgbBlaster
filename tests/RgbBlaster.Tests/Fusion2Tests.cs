@@ -33,6 +33,42 @@ public class Fusion2ProtocolTests
     public void CountBucket(int leds, byte expected) => Assert.Equal(expected, P.CountBucket(leds));
 
     [Fact]
+    public void SaveLightingStoresStaticHeaderEffectAndWritesFlash()
+    {
+        var info = FakeHid.HealthyInfo();
+        info[11] = P.FlagPersistent;
+        var hw = new FakeHid { InfoReply = info };
+        var cfg = new Fusion2Config { Headers = [new() { Header = Fusion2Header.D_LED2, Name = "front", LedCount = 4 }] };
+        var dev = new Fusion2Device(hw, P.PidIt5711, cfg);
+        dev.Open();
+        dev.SetZone(0, [new Rgb(200, 0, 0), new Rgb(100, 0, 0), Rgb.Black, Rgb.Black]);
+        dev.Flush();
+        hw.Sent.Clear();
+
+        dev.SaveLightingAndRelease();
+
+        var effect = hw.Sent.Single(r => r[1] == 0x26); // D_LED2 effect zone 6
+        Assert.Equal(1u << 6, BinaryPrimitives.ReadUInt32LittleEndian(effect.AsSpan(2)));
+        Assert.Equal(1, effect[11]);                      // static
+        Assert.Equal([0, 0, 150], effect[14..17]);        // B, G, R: average of the lit LEDs
+        var cmds = hw.Sent.Select(r => r[1]).ToList();
+        Assert.True(cmds.IndexOf(P.CmdDisableBuiltin) > cmds.IndexOf(0x26));
+        Assert.True(cmds.IndexOf(P.CmdSaveFlash) > cmds.IndexOf(P.CmdPersistent));
+        Assert.Equal(1, hw.Sent.Single(r => r[1] == P.CmdPersistent)[2]);
+    }
+
+    [Fact]
+    public void SaveLightingSkipsFlashWithoutSupport()
+    {
+        var hw = new FakeHid();
+        var dev = new Fusion2Device(hw, P.PidIt5711, new Fusion2Config { Headers = [new() { Header = Fusion2Header.D_LED1, Name = "rear", LedCount = 8 }] });
+        dev.Open();
+        hw.Sent.Clear();
+        dev.SaveLightingAndRelease();
+        Assert.DoesNotContain(hw.Sent, r => r[1] is P.CmdSaveFlash or P.CmdPersistent);
+    }
+
+    [Fact]
     public void OpenFailsOnEmptyInfoReport()
     {
         var hw = new FakeHid { InfoReply = new byte[64] };

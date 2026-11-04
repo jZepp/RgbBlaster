@@ -77,7 +77,7 @@ int Run(string[] a)
         }
     }
 
-    ReleaseAll(devices);
+    ExitLightingRunner.Apply(devices, config.OnExit);
     return 0;
 }
 

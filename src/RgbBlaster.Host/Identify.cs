@@ -66,11 +66,7 @@ internal static class Identify
         {
             stop.Cancel();
             keepAlive.Join(2000);
-            foreach (var d in devices)
-            {
-                try { d.Release(); } catch { /* best effort */ }
-                d.Dispose();
-            }
+            ExitLightingRunner.Apply(devices, config.OnExit);
         }
     }
 
