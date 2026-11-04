@@ -1,6 +1,7 @@
 ﻿using RgbBlaster.Core;
 using RgbBlaster.Drivers.Fusion2;
 using RgbBlaster.Drivers.Gpu;
+using RgbBlaster.Drivers.Logitech;
 using RgbBlaster.Drivers.Link;
 using RgbBlaster.Engine;
 
@@ -91,7 +92,7 @@ int Run(string[] a)
 List<IRgbDevice> OpenAll()
 {
     var list = new List<IRgbDevice>();
-    foreach (var d in Fusion2Device.Discover(config.Fusion2).Cast<IRgbDevice>().Concat(LinkHubDevice.Discover()).Concat(GigabyteGpuDevice.Discover()))
+    foreach (var d in Fusion2Device.Discover(config.Fusion2).Cast<IRgbDevice>().Concat(LinkHubDevice.Discover()).Concat(GigabyteGpuDevice.Discover()).Concat(LogitechMouseDevice.Discover()))
     {
         try { d.Open(); list.Add(d); }
         catch (Exception ex) { Console.WriteLine($"{d.Name}: open failed: {ex.Message}"); d.Dispose(); }
