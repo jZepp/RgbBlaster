@@ -61,7 +61,7 @@ internal static class Identify
             {
                 "lights" => Lights(devices, Rgb.Parse(a.ElementAtOrDefault(1) ?? "FFFFFF")),
                 "fans" => Fans(devices.OfType<LinkHubDevice>().ToList()),
-                "walk" => Walk(devices, a.ElementAtOrDefault(1), a.ElementAtOrDefault(2)),
+                "walk" => Walk(devices, a.ElementAtOrDefault(1), a.ElementAtOrDefault(2), a.ElementAtOrDefault(3)),
                 "gpu" => GpuZones(devices.OfType<GigabyteGpuDevice>().FirstOrDefault()),
                 _ => Usage(),
             };
@@ -79,7 +79,7 @@ internal static class Identify
         Console.WriteLine("""
             rgbblaster identify lights [RRGGBB]      Light chosen zones (default white)
             rgbblaster identify fans                 Run one LINK channel at 100%, others at 30%
-            rgbblaster identify walk <device> <zone> Light one LED at a time in a zone (e.g. walk link ch1)
+            rgbblaster identify walk <device> <zone> [i,j,..] Light one LED at a time in a zone (e.g. walk link ch1)
             rgbblaster identify gpu                  Light each GPU hardware zone, live-color then stored-effect register
             Flags: --all-zones (board firmware zones 0-10), --lamp-off (force lamp-array mode off)
             """);
@@ -186,7 +186,8 @@ internal static class Identify
     }
 
     /// <summary>Lights LED 0..n-1 of one zone in turn, others off. Confirms LED order and count.</summary>
-    private static int Walk(List<IRgbDevice> devices, string? deviceId, string? zoneId)
+    /// <param name="only">Optional comma-separated LED indices to walk instead of every LED.</param>
+    private static int Walk(List<IRgbDevice> devices, string? deviceId, string? zoneId, string? only = null)
     {
         var dev = devices.FirstOrDefault(d => d.Id.Equals(deviceId, StringComparison.OrdinalIgnoreCase));
         int zi = dev?.Zones.ToList().FindIndex(z => z.Id.Equals(zoneId, StringComparison.OrdinalIgnoreCase)) ?? -1;
@@ -201,8 +202,11 @@ internal static class Identify
             d.Flush();
         }
         var frame = new Rgb[dev.Zones[zi].LedCount];
-        Console.WriteLine($"{dev.Id}/{dev.Zones[zi].Id}: {frame.Length} LEDs. Enter = next, q = quit.");
-        for (int i = 0; i < frame.Length; i++)
+        var order = only is null
+            ? Enumerable.Range(0, frame.Length).ToList()
+            : only.Split(',').Select(s => int.TryParse(s, out var n) ? n : -1).Where(n => n >= 0 && n < frame.Length).ToList();
+        Console.WriteLine($"{dev.Id}/{dev.Zones[zi].Id}: {frame.Length} LEDs, walking {order.Count}. Enter = next, q = quit.");
+        foreach (int i in order)
         {
             Array.Clear(frame);
             frame[i] = new Rgb(255, 0, 0);
