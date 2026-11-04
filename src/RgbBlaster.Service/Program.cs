@@ -10,6 +10,9 @@ var dataDir = simulate
     : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "RgbBlaster");
 
 builder.Host.UseWindowsService(o => o.ServiceName = "RgbBlaster");
+// The GUI polls several times a second; per-request logs would flood the console and the event log.
+builder.Logging.AddFilter("Microsoft.AspNetCore", LogLevel.Warning);
+builder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Information);
 builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(15));
 builder.WebHost.ConfigureKestrel(k =>
 {

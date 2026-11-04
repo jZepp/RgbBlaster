@@ -35,6 +35,8 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
     private readonly Queue<HistoryPoint> _history = new();
     private IReadOnlyList<SensorInfo> _sensors = [];
     private readonly List<string> _messages = [];
+    private string? _lastNote;
+    private int _repeats;
 
     public bool Simulated => simulate;
 
@@ -192,9 +194,14 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
 
     private void Note(string message)
     {
-        log.LogInformation("{Message}", message);
         lock (_messages)
         {
+            // A fault that repeats every tick is logged once until a different message appears.
+            if (message == _lastNote) { _repeats++; return; }
+            if (_repeats > 0) _messages.Add($"{DateTime.Now:HH:mm:ss} (previous message repeated {_repeats} times)");
+            _lastNote = message;
+            _repeats = 0;
+            log.LogInformation("{Message}", message);
             _messages.Add($"{DateTime.Now:HH:mm:ss} {message}");
             if (_messages.Count > 50) _messages.RemoveAt(0);
         }
