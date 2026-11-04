@@ -11,6 +11,8 @@ public sealed class AppConfig
     public Fusion2Config Fusion2 { get; set; } = new();
     public List<ZonePlacement> Layout { get; set; } = [];
     public ExitLighting OnExit { get; set; } = ExitLighting.SaveLast;
+    /// <summary>Motherboard fan headers the app may control. Headers not listed stay on the BIOS curve.</summary>
+    public List<BoardFanConfig> BoardFans { get; set; } = [];
 
     public static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -42,6 +44,15 @@ public sealed class Fusion2Config
     /// The command takes the board out of Windows Dynamic Lighting control.
     /// </summary>
     public bool ForceLampArrayOff { get; set; }
+}
+
+public sealed class BoardFanConfig
+{
+    /// <summary>Super I/O fan channel, 0-based, as listed by <c>board-fans</c>.</summary>
+    public int Channel { get; set; }
+    public string Name { get; set; } = "";
+    /// <summary>Lowest duty the app sets. Requests below it are raised to it, so the fans never stall.</summary>
+    public byte MinDutyPercent { get; set; } = 30;
 }
 
 /// <summary>What the lights show after the app exits.</summary>

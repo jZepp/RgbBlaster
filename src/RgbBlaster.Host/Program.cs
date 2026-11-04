@@ -21,11 +21,13 @@ switch (cmd)
     case "keyboard-config": return KeyboardConfig();
     case "keyboard-poke": return KeyboardPoke(args.Skip(1).ToArray());
     case "board-fans": return BoardFans();
+    case "board-fan-test": return BoardFanTest(args.Skip(1).ToArray());
     default:
         Console.WriteLine("""
             rgbblaster identify lights|fans|walk Map zones and fan channels to physical parts
             rgbblaster info                      Show detected Fusion 2 controllers (reads only)
             rgbblaster board-fans                Super I/O fan RPM, PWM and temperatures (reads only; needs PawnIO, run as admin)
+            rgbblaster board-fan-test <channel>  Runs one header at 100% then 40%, then hands it back to the BIOS (admin)
             rgbblaster link-info                 LINK hub devices, RPM, temperatures (sets fans 50%, pump 100% while open)
             rgbblaster run solid <RRGGBB>        Static color on every zone
             rgbblaster run rainbow               Rainbow wave across the canvas
@@ -217,5 +219,34 @@ int BoardFans()
     int lines = 0;
     foreach (var line in BoardFanProbe.Report()) { Console.WriteLine(line); lines++; }
     if (lines == 0) Console.WriteLine("No motherboard sensors found. Install PawnIO and run as administrator.");
+    return 0;
+}
+
+int BoardFanTest(string[] a)
+{
+    if (!int.TryParse(a.FirstOrDefault(), out int ch) || ch < 1 || ch > 5)
+    {
+        Console.WriteLine("Usage: board-fan-test <channel 1-5>. Channel 0 (CPU_FAN) is refused.");
+        return 2;
+    }
+    using var stop = new ManualResetEventSlim();
+    Console.CancelKeyPress += (_, e) => { e.Cancel = true; stop.Set(); };
+    using var dev = BoardFanDevice.Open([new BoardFanConfig { Channel = ch, MinDutyPercent = 30 }]);
+    if (dev is null) { Console.WriteLine("No Super I/O chip. Install PawnIO and run as administrator."); return 1; }
+    var fan = dev.Fans[0];
+    Console.WriteLine($"{dev.Name} channel {ch}. Ctrl+C restores the BIOS curve.");
+    foreach (byte duty in new byte[] { 100, 40 })
+    {
+        fan.SetDutyPercent(duty);
+        for (int i = 0; i < 8 && !stop.IsSet; i++)
+        {
+            Console.WriteLine($"  {duty,3}%  {fan.ReadRpm()?.ToString() ?? "-"} RPM");
+            stop.Wait(1000);
+        }
+        if (stop.IsSet) break;
+    }
+    dev.Release();
+    Thread.Sleep(1500);
+    Console.WriteLine($"  BIOS  {fan.ReadRpm()?.ToString() ?? "-"} RPM (restored)");
     return 0;
 }
