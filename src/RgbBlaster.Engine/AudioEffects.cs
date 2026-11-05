@@ -121,14 +121,14 @@ public sealed class BeatPulseEffect(Palette colors, IAudioSource audio, float sp
     }
 }
 
-/// <summary>Makes any effect follow the sound: its brightness, its speed, or a flash on each beat.</summary>
-/// <param name="mode">"brightness", "speed" or "beat".</param>
+/// <summary>Makes any effect follow the sound: its brightness, its speed, a flash on each beat, or a kick back on loud hits.</summary>
+/// <param name="mode">"brightness", "speed", "beat" or "kick".</param>
 /// <param name="amount">0..1: how much the sound changes the effect. 1 means dark (or stopped) in silence.</param>
 public sealed class SoundFollowEffect(IEffect inner, IAudioSource audio, string mode, float amount) : IEffect
 {
     private readonly BeatDetector _beats = new();
     private double _last = double.NaN, _warped;
-    private float _level, _flash;
+    private float _level, _flash, _push;
 
     public string Name => inner.Name;
     public NativeEffect Native => inner.Native;
@@ -146,6 +146,14 @@ public sealed class SoundFollowEffect(IEffect inner, IAudioSource audio, string 
             case "speed":
                 // From 1 - amount of normal speed in silence up to about twice normal speed at full level.
                 _warped += dt * ((1 - a) + a * 2.2f * _level);
+                inner.Render(canvas, _warped);
+                return;
+            case "kick":
+                // A loud hit pushes the effect backward: at full strength it runs back at twice normal speed,
+                // then the push fades over about a quarter second and the effect goes forward again.
+                // Net effect of one hit at full strength: about 0.75 s of motion undone.
+                _push = _beats.Update(frame.Level, dt, t) ? 1 : _push * MathF.Exp(-dt / 0.25f);
+                _warped += dt * (1 - a * 3 * _push);
                 inner.Render(canvas, _warped);
                 return;
             case "beat":

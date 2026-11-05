@@ -150,6 +150,33 @@ public class AudioTests
         Assert.NotEqual(Rgb.Black, c.Row(0)[0]);
     }
 
+    private sealed class TimeProbe : IEffect
+    {
+        public double T;
+        public string Name => "probe";
+        public void Render(Canvas canvas, double t) => T = t;
+    }
+
+    [Fact]
+    public void KickBackRunsTheEffectBackwardAfterALoudHit()
+    {
+        var src = new MutableAudio();
+        var probe = new TimeProbe();
+        var e = new SoundFollowEffect(probe, src, "kick", 1);
+        var c = new Canvas(2, 2);
+        src.Frame = new AudioFrame(0.1f, new float[16]);
+        for (int i = 0; i <= 60; i++) e.Render(c, i / 60.0);          // quiet second: moves forward
+        double before = probe.T;
+        Assert.InRange(before, 0.95, 1.05);
+        src.Frame = new AudioFrame(1, new float[16]);                   // loud hit
+        for (int i = 61; i <= 75; i++) e.Render(c, i / 60.0);
+        Assert.True(probe.T < before - 0.1, $"expected a step back from {before}, got {probe.T}");
+        src.Frame = new AudioFrame(0.1f, new float[16]);
+        double low = probe.T;
+        for (int i = 76; i <= 180; i++) e.Render(c, i / 60.0);
+        Assert.True(probe.T > low + 1);                                 // forward again
+    }
+
     private sealed class MutableAudio : IAudioSource
     {
         public AudioFrame Frame = AudioFrame.Silence;

@@ -315,7 +315,7 @@ const lighting = {
       // Frequency rings is a Ripple mode only.
       if (s.sound === 'rings' && s.type !== 'radial') s.sound = 'off';
       kids.push(h('div', { class: 'field' }, 'Follow sound', h('div', { class: 'seg' },
-        ...[['off', 'Off'], ['brightness', 'Brightness'], ['speed', 'Speed'], ['beat', 'Flash on beat'],
+        ...[['off', 'Off'], ['brightness', 'Brightness'], ['speed', 'Speed'], ['beat', 'Flash on beat'], ['kick', 'Kick back'],
           ...(s.type === 'radial' ? [['rings', 'Frequency rings']] : [])].map(([v, t]) =>
           h('button', { class: s.sound === v ? 'on' : '', onclick: () => { set('sound', v); this.render(); } }, t)))));
       if (s.sound === 'rings') kids.push(h('div', { class: 'hint' }, 'Rings near the center follow the bass; the outer rings follow the treble.'));

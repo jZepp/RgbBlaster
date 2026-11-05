@@ -42,7 +42,7 @@ public static class EffectFactory
         if (variation == "drift" && amount > 0 && e is not RainbowWaveEffect)
             e = new ColorDriftEffect(e, palette, amount, Math.Clamp(s.VariationSeconds, 1f, 600f));
         string sound = (s.Sound ?? "off").ToLowerInvariant();
-        if (sound is "brightness" or "speed" or "beat" && s.Type is not ("spectrum" or "beat"))
+        if (sound is "brightness" or "speed" or "beat" or "kick" && s.Type is not ("spectrum" or "beat"))
             e = new SoundFollowEffect(e, audio, sound, s.SoundAmount);
         float b = Math.Clamp(s.Brightness, 0f, 1f);
         return b >= 0.999f ? e : new BrightnessEffect(e, b);

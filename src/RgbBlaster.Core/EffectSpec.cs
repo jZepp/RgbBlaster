@@ -36,6 +36,7 @@ public sealed class EffectSpec
     public float VariationSeconds { get; set; } = 20;
     /// <summary>
     /// "off"; "brightness", "speed" or "beat": the effect follows the sound captured by the tray app.
+    /// "kick": loud hits push the motion backward for a moment.
     /// "rings" (Ripple only): each ring follows one part of the spectrum.
     /// </summary>
     public string Sound { get; set; } = "off";
@@ -47,7 +48,7 @@ public sealed class EffectSpec
     /// <summary>True when the effect needs sound levels.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public bool UsesSound => Type is "spectrum" or "beat"
-        || Sound is "brightness" or "speed" or "beat"
+        || Sound is "brightness" or "speed" or "beat" or "kick"
         || (Sound is "rings" && Type is "radial");
 
     /// <summary>The palette, falling back to Color and Color2.</summary>
