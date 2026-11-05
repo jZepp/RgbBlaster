@@ -5,21 +5,31 @@ namespace RgbBlaster.Service;
 /// <summary>
 /// Feeds the pump LCD on its own thread: the status screen once per second, or media frames at their own timing.
 /// A still image is sent again every second because the screen expects regular frames.
+/// All device I/O runs on that thread. After a fault the device is closed and opened again.
 /// Works without a device (simulation); the last frame is kept for the GUI preview either way.
 /// </summary>
 public sealed class LcdPlayer : IDisposable
 {
-    private readonly LinkLcdDevice? _device;
+    private const int ReopenDelayMs = 2000;
+    // Assumed power-on values. Feature reports are sent only when the requested value differs.
+    private const byte DefaultBrightness = 100, DefaultRotation = 0;
+
+    private readonly Func<LinkLcdDevice?>? _open;
     private readonly Func<(float? Cpu, float? Gpu, int? Pump)> _values;
+    private readonly Action<string> _note;
     private readonly Thread _thread;
     private readonly AutoResetEvent _wake = new(false);
     private volatile bool _running = true;
     private volatile IReadOnlyList<LcdFrame>? _frames;
+    private volatile byte _brightness = DefaultBrightness, _rotation = DefaultRotation;
+    private LinkLcdDevice? _device;
 
-    public LcdPlayer(LinkLcdDevice? device, Func<(float? Cpu, float? Gpu, int? Pump)> values)
+    /// <param name="open">Opens the device; null runs without hardware.</param>
+    public LcdPlayer(Func<LinkLcdDevice?>? open, Func<(float? Cpu, float? Gpu, int? Pump)> values, Action<string> note)
     {
-        _device = device;
+        _open = open;
         _values = values;
+        _note = note;
         _thread = new Thread(Run) { IsBackground = true, Name = "LcdPlayer" };
         _thread.Start();
     }
@@ -35,16 +45,33 @@ public sealed class LcdPlayer : IDisposable
         _wake.Set();
     }
 
-    public void SetBrightness(byte percent) => Try(() => _device?.SetBrightness(percent));
-    public void SetRotation(byte quarterTurns) => Try(() => _device?.SetRotation(quarterTurns));
+    public void SetBrightness(byte percent) { _brightness = Math.Min(percent, (byte)100); _wake.Set(); }
+    public void SetRotation(byte quarterTurns) { _rotation = (byte)(quarterTurns & 3); _wake.Set(); }
 
     private void Run()
     {
         using var dash = new LcdDashboard();
         int index = 0;
         IReadOnlyList<LcdFrame>? playing = null;
+        byte sentBrightness = DefaultBrightness, sentRotation = DefaultRotation;
+        bool openFailedNoted = false;
         while (_running)
         {
+            if (_device is null && _open is not null)
+            {
+                try { _device = _open(); }
+                catch (Exception ex) { Fault("open", ex); }
+                if (_device is null)
+                {
+                    if (!openFailedNoted) { _note("LCD: not found; retrying."); openFailedNoted = true; }
+                    _wake.WaitOne(ReopenDelayMs);
+                    continue;
+                }
+                openFailedNoted = false;
+                sentBrightness = DefaultBrightness;
+                sentRotation = DefaultRotation;
+            }
+
             var frames = _frames;
             if (!ReferenceEquals(frames, playing)) { playing = frames; index = 0; }
             int delay;
@@ -63,26 +90,47 @@ public sealed class LcdPlayer : IDisposable
                 delay = playing.Count == 1 ? 1000 : f.DelayMs;
             }
             LastFrame = jpeg;
-            Try(() => _device?.ShowJpeg(jpeg));
+
+            if (_device is { } dev)
+            {
+                string op = "frame";
+                try
+                {
+                    byte b = _brightness, r = _rotation;
+                    if (b != sentBrightness) { op = "brightness"; dev.SetBrightness(b); sentBrightness = b; }
+                    if (r != sentRotation) { op = "rotation"; dev.SetRotation(r); sentRotation = r; }
+                    op = "frame";
+                    dev.ShowJpeg(jpeg);
+                    LastError = null;
+                }
+                catch (Exception ex)
+                {
+                    Fault(op, ex);
+                    dev.Dispose();
+                    _device = null;
+                    _wake.WaitOne(ReopenDelayMs);
+                    continue;
+                }
+            }
             _wake.WaitOne(delay);
         }
     }
 
-    private void Try(Action a)
+    private void Fault(string op, Exception ex)
     {
-        try { a(); LastError = null; }
-        catch (Exception ex) { LastError = ex.Message; }
+        LastError = $"{op}: {ex.Message}";
+        _note($"LCD {op} failed: {ex.Message}");
     }
 
     public void Dispose()
     {
         _running = false;
         _wake.Set();
-        _thread.Join(2000);
-        if (_device is not null)
+        _thread.Join(3000);
+        if (_device is { } dev)
         {
-            try { _device.Release(); } catch { /* best effort on shutdown */ }
-            _device.Dispose();
+            try { dev.Release(); } catch { /* best effort on shutdown */ }
+            dev.Dispose();
         }
         _wake.Dispose();
     }

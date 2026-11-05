@@ -73,7 +73,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
             _devices = Simulation.Devices(_settings.Layout);
             _temps = new Simulation.Temps();
             _fans = Simulation.Fans(_settings.Profiles.SelectMany(p => p.FanCurves).SelectMany(c => c.Fans));
-            _lcd = new LcdPlayer(null, LcdValues);
+            _lcd = new LcdPlayer(null, LcdValues, Note);
             Note("Simulation: no hardware is touched.");
         }
         else
@@ -86,10 +86,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
             if (config.BoardFans.Count > 0 && _board is null) Note("Board fans: no Super I/O access (PawnIO and administrator rights needed). They stay on the BIOS curve.");
             _temps = _hm;
             _fans = _hubs.SelectMany(h => h.Fans).Concat(_board?.Fans ?? []).ToList();
-            LinkLcdDevice? lcd = null;
-            try { lcd = LinkLcdDevice.Discover().FirstOrDefault(); }
-            catch (Exception ex) { Note($"LCD: {ex.Message}"); }
-            _lcd = new LcdPlayer(lcd, LcdValues);
+            _lcd = new LcdPlayer(() => LinkLcdDevice.Discover().FirstOrDefault(), LcdValues, Note);
         }
 
         _fanCtl = BuildFanController(profile.FanCurves);

@@ -117,7 +117,13 @@ async function tickPreview() {
   } catch { /* service restarting */ }
   finally { previewBusy = false; }
 }
-setInterval(tickPreview, 80);
+// Fetches the next frame as soon as the last one is drawn, timed to repaint, at most about 30 per second.
+const PREVIEW_MIN_MS = 33;
+let lastPreview = 0;
+(function previewLoop(t) {
+  if (t - lastPreview >= PREVIEW_MIN_MS && !previewBusy) { lastPreview = t; tickPreview(); }
+  requestAnimationFrame(previewLoop);
+})(0);
 
 // ---------- Status polling ----------
 async function tickStatus() {
