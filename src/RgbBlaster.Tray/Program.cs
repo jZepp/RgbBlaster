@@ -36,6 +36,8 @@ internal static class Program
         menu.Items.Add(new ToolStripMenuItem("Open RgbBlaster", null, (_, _) => Open(url)) { Font = new Font(menu.Font, FontStyle.Bold) });
         menu.Items.Add(state);
         menu.Items.Add(new ToolStripMenuItem($"Tray version {AppVersion.Display}") { Enabled = false });
+        var conflicts = new ToolStripMenuItem("Conflicting apps: none") { Enabled = false };
+        menu.Items.Add(conflicts);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(soundOn);
         menu.Items.Add(soundState);
@@ -85,14 +87,36 @@ internal static class Program
             UpdateSound();
             if (ok == last) return;
             last = ok;
+            if (ok) CheckVendorApps(); // check again whenever the service starts
             tray.Icon = ok ? up : down;
             tray.Text = ok ? $"RgbBlaster {version}: running" : "RgbBlaster: service not running";
             state.Text = ok ? $"Service {version} running" : "Service not running";
         }
+        // Vendor RGB apps fight the service for the devices. Warn once for each app that starts while the service runs;
+        // an app that stays open is not shown again until it closes and starts again.
+        var warned = new HashSet<string>();
+        void CheckVendorApps()
+        {
+            var found = VendorApps.Running();
+            var names = found.Select(a => a.Name).ToHashSet();
+            conflicts.Text = found.Count == 0 ? "Conflicting apps: none" : $"Conflicting apps: {string.Join(", ", names)}";
+            warned.IntersectWith(names);
+            if (last != true) return;
+            var fresh = found.Where(a => warned.Add(a.Name)).ToList();
+            if (fresh.Count == 0) return;
+            var lines = string.Join("\n", fresh.Select(a => $"{a.Name} ({a.Devices})"));
+            tray.ShowBalloonTip(15000, "RgbBlaster: close conflicting app",
+                $"{lines}\nIt controls the same devices. Lights can flicker and the AIO can drop off USB.", ToolTipIcon.Warning);
+        }
+
         using var timer = new System.Windows.Forms.Timer { Interval = 3000 };
         timer.Tick += (_, _) => Poll();
         timer.Start();
+        using var vendorTimer = new System.Windows.Forms.Timer { Interval = 60_000 };
+        vendorTimer.Tick += (_, _) => CheckVendorApps();
+        vendorTimer.Start();
         Poll();
+        CheckVendorApps();
 
         Application.Run();
         tray.Visible = false;

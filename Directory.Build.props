@@ -5,7 +5,7 @@
     The SDK appends the git commit to InformationalVersion, for example 0.1.0+b2ee5d0...
   -->
   <PropertyGroup>
-    <VersionPrefix>0.3.1</VersionPrefix>
+    <VersionPrefix>0.4.0</VersionPrefix>
     <Product>RgbBlaster</Product>
   </PropertyGroup>
 </Project>
