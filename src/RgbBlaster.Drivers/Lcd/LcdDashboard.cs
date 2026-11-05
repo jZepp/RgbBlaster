@@ -105,6 +105,7 @@ public sealed class LcdDashboard : IDisposable
         double now = _clockSw.Elapsed.TotalSeconds;
         float dt = (float)Math.Clamp(now - _lastFrame, 0, 1);
         _lastFrame = now;
+        v = v with { PumpRpm = SteadyPump(v.PumpRpm, dt) };
         Ease(ref _cpuShown, v.CpuC, dt);
         Ease(ref _gpuShown, v.GpuC, dt);
         Ease(ref _pumpShown, v.PumpRpm, dt);
@@ -137,6 +138,21 @@ public sealed class LcdDashboard : IDisposable
             }
         }
         return Encode();
+    }
+
+    private float _pumpAvg = float.NaN;
+    private int? _pumpHeld;
+
+    /// <summary>
+    /// The pump tachometer varies by about ±25 rpm from one second to the next.
+    /// Shows a 3-second average, rounded to 10 rpm, that changes only after the average moves 25 rpm or more.
+    /// </summary>
+    private int? SteadyPump(int? rpm, float dt)
+    {
+        if (rpm is not int r) { _pumpAvg = float.NaN; return _pumpHeld = null; }
+        _pumpAvg = float.IsNaN(_pumpAvg) ? r : _pumpAvg + (r - _pumpAvg) * (1 - MathF.Exp(-dt / 3));
+        if (_pumpHeld is not int held || Math.Abs(_pumpAvg - held) >= 25) _pumpHeld = (int)MathF.Round(_pumpAvg / 10) * 10;
+        return _pumpHeld;
     }
 
     /// <summary>Moves a shown value most of the way to its target within about half a second.</summary>
