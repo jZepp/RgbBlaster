@@ -63,4 +63,25 @@ public class PaletteVariationTests
             EffectFactory.Create(new EffectSpec { Type = type, Colors = ["#FF0000", "#0000FF"], Variation = "random", VariationAmount = 45 }).Render(canvas, 5);
         }
     }
+
+    [Fact]
+    public void RandomEntryChangesEachTurnAndFixedEntriesStay()
+    {
+        var p = new Palette([Red, null]) { Seed = 3 };
+        Assert.Equal(Red, p[0L]);
+        Assert.Equal(Red, p[2L]);
+        var turns = Enumerable.Range(0, 50).Select(i => p[(long)(i * 2 + 1)]).ToList();
+        Assert.Equal(turns[4], p[9L]);                  // the same turn keeps its color while it moves
+        Assert.True(turns.Distinct().Count() > 20);     // each turn of the random entry gets a new color
+        Assert.Equal(p.Span(1), p.Span(1));             // gradients keep one color for it
+    }
+
+    [Fact]
+    public void FactoryReadsRandomEntries()
+    {
+        var e = EffectFactory.Create(new EffectSpec { Type = "breathe", Colors = ["random"], Speed = 1 });
+        var c = new Canvas(2, 2);
+        var peaks = Enumerable.Range(0, 20).Select(i => { e.Render(c, i + 0.5); return c.Pixels[0]; }).ToList();
+        Assert.True(peaks.Distinct().Count() > 5);      // each breath a new color
+    }
 }

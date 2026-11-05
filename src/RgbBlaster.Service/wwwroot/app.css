@@ -159,6 +159,9 @@ input[type=color] { width: 44px; height: 32px; border: 1px solid var(--line); bo
 .palette { display: flex; flex-wrap: wrap; gap: 8px; }
 .swatch { display: flex; flex-direction: column; align-items: center; gap: 3px; }
 .swatch input[type=color] { width: 44px; height: 36px; padding: 0; border: 1px solid var(--line); border-radius: 8px; background: none; cursor: pointer; }
+.swatch .random { width: 44px; height: 36px; padding: 0; border: 1px solid var(--line); border-radius: 8px; cursor: pointer;
+  background: conic-gradient(#ff3030, #ffd000, #30e060, #30c0ff, #6040ff, #ff30c0, #ff3030); color: #fff;
+  font: 700 18px/1 system-ui, sans-serif; text-shadow: 0 0 3px #000, 0 0 2px #000; }
 .swatch-tools { display: flex; gap: 2px; }
 .swatch-tools button { width: 14px; height: 16px; padding: 0; border: 0; background: none; color: var(--muted); cursor: pointer; font-size: 13px; line-height: 1; }
 .swatch-tools button:hover:not(:disabled) { color: var(--accent); }

@@ -285,7 +285,8 @@ const lighting = {
     };
     const kids = [];
     if (want.has('color')) {
-      kids.push(h('label', { class: 'field-row' }, 'Color', h('input', { type: 'color', value: this.spec.colors[0] ?? this.spec.color,
+      const first = this.spec.colors[0];
+      kids.push(h('label', { class: 'field-row' }, 'Color', h('input', { type: 'color', value: first?.startsWith('#') ? first : this.spec.color,
         oninput: e => { this.spec.colors[0] = e.target.value; set('color', e.target.value); } })));
     }
     if (want.has('palette')) kids.push(this.paletteEditor(set));
@@ -359,9 +360,21 @@ const lighting = {
   paletteEditor(set) {
     const colors = this.spec.colors;
     const commit = redraw => { set('colors', colors); if (redraw) this.render(); };
+    // "random": a new random color each time this color's turn comes round. The ? button switches it on and off;
+    // switching off brings back the color the card had before.
+    this.keptColors ??= {};
+    const random = c => c === 'random';
+    const toggle = i => {
+      if (random(colors[i])) colors[i] = this.keptColors[i] ?? '#ffffff';
+      else { this.keptColors[i] = colors[i]; colors[i] = 'random'; }
+      commit(true);
+    };
     const swatches = colors.map((c, i) => h('div', { class: 'swatch' },
-      h('input', { type: 'color', value: c, title: `Color ${i + 1}`, oninput: e => { colors[i] = e.target.value; commit(false); } }),
+      random(c)
+        ? h('button', { class: 'random', title: `Color ${i + 1}: random each time. Click to pick a fixed color.`, onclick: () => toggle(i) }, '?')
+        : h('input', { type: 'color', value: c, title: `Color ${i + 1}`, oninput: e => { colors[i] = e.target.value; commit(false); } }),
       h('div', { class: 'swatch-tools' },
+        h('button', { title: random(c) ? 'Fixed color' : 'Random color each time', onclick: () => toggle(i) }, random(c) ? '■' : '?'),
         h('button', { title: 'Move left', disabled: i === 0, onclick: () => { [colors[i - 1], colors[i]] = [colors[i], colors[i - 1]]; commit(true); } }, '‹'),
         h('button', { title: 'Remove', disabled: colors.length <= 1, onclick: () => { colors.splice(i, 1); commit(true); } }, '×'),
         h('button', { title: 'Move right', disabled: i === colors.length - 1, onclick: () => { [colors[i + 1], colors[i]] = [colors[i], colors[i + 1]]; commit(true); } }, '›'))));
@@ -370,7 +383,8 @@ const lighting = {
     const presets = h('div', { class: 'presets' }, h('span', { class: 'muted' }, 'Presets'),
       ...Object.entries(PALETTES).map(([name, cs]) => h('button', { class: 'preset', title: name, style: `--g: linear-gradient(90deg, ${cs.join(', ')})`,
         onclick: () => { colors.splice(0, colors.length, ...cs); commit(true); } }, name)));
-    const strip = h('div', { class: 'palette-strip', style: `background: linear-gradient(90deg, ${colors.length > 1 ? colors.join(', ') : `${colors[0]}, ${colors[0]}`})` });
+    const shown = colors.map(c => random(c) ? '#808080' : c);
+    const strip = h('div', { class: 'palette-strip', style: `background: linear-gradient(90deg, ${shown.length > 1 ? shown.join(', ') : `${shown[0]}, ${shown[0]}`})` });
     return h('div', { class: 'field' }, `Colors (${colors.length})`, strip, h('div', { class: 'palette' }, ...swatches, add), presets);
   },
 };

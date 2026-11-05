@@ -5,10 +5,13 @@ namespace RgbBlaster.Engine;
 /// <summary>
 /// An ordered list of colors that effects blend through. Never empty.
 /// Optional variation moves each color's hue: per band at random (<see cref="RandomBands"/>), or for all colors over time (<see cref="SetDrift"/>).
+/// A random entry takes a new random hue each time its turn comes round: each band, breath, drop or cycle pass.
 /// </summary>
 public sealed class Palette
 {
     private readonly Rgb[] _base;
+    private readonly bool[] _random;
+    private readonly bool _anyRandom;
     private Rgb[] _colors;
     private float _drift;
 
@@ -17,10 +20,16 @@ public sealed class Palette
     private readonly long[] _cacheSlot = new long[CacheSize];
     private readonly Rgb[] _cacheColor = new Rgb[CacheSize];
 
-    public Palette(IEnumerable<Rgb> colors)
+    public Palette(IEnumerable<Rgb> colors) : this(colors.Select(c => (Rgb?)c)) { }
+
+    /// <param name="colors">Null entries are random colors.</param>
+    public Palette(IEnumerable<Rgb?> colors)
     {
-        _base = colors.ToArray();
-        if (_base.Length == 0) _base = [Rgb.White];
+        var list = colors.ToArray();
+        if (list.Length == 0) list = [Rgb.White];
+        _random = list.Select(c => c is null).ToArray();
+        _anyRandom = _random.Any(r => r);
+        _base = list.Select(c => c ?? Rgb.White).ToArray();
         _colors = _base;
         ClearCache();
     }
@@ -56,13 +65,15 @@ public sealed class Palette
 
     private Rgb At(long slot)
     {
-        int n = _colors.Length;
-        var c = _colors[(int)(((slot % n) + n) % n)];
-        if (!RandomBands || Variation <= 0) return c;
+        int n = _colors.Length, i = (int)(((slot % n) + n) % n);
+        var c = _colors[i];
+        bool random = _random[i];
+        if (!random && (!RandomBands || Variation <= 0)) return c;
         int k = (int)(slot & (CacheSize - 1));
         if (_cacheSlot[k] == slot) return _cacheColor[k];
         float r = Hash(slot);
-        var v = Variation >= 180 ? Rgb.FromHsv(r * 360, 1, Value(c)) : Turn(c, (r * 2 - 1) * Variation);
+        var v = random ? Rgb.FromHsv(r * 360, 1, 1)
+            : Variation >= 180 ? Rgb.FromHsv(r * 360, 1, Value(c)) : Turn(c, (r * 2 - 1) * Variation);
         _cacheSlot[k] = slot;
         _cacheColor[k] = v;
         return v;
@@ -74,7 +85,7 @@ public sealed class Palette
     /// </summary>
     public Rgb Loop(float u)
     {
-        if (_colors.Length == 1 && !RandomBands) return _colors[0];
+        if (_colors.Length == 1 && !RandomBands && !_anyRandom) return _colors[0];
         float p = u * _colors.Length;
         long slot = (long)MathF.Floor(p);
         return Blend(At(slot), At(slot + 1), Smooth(p - slot));
@@ -95,15 +106,20 @@ public sealed class Palette
         return At(slot).Scale(MathF.Sin(MathF.PI * f / lit));
     }
 
-    /// <summary>Position u from 0 (first color) to 1 (last color), clamped. For gradients that do not loop. Follows drift only.</summary>
+    /// <summary>
+    /// Position u from 0 (first color) to 1 (last color), clamped. For gradients that do not loop. Follows drift only.
+    /// A random entry keeps one random hue here, chosen when the palette is made.
+    /// </summary>
     public Rgb Span(float u)
     {
         int n = _colors.Length;
-        if (n == 1) return _colors[0];
+        if (n == 1) return Fixed(0);
         float p = Math.Clamp(u, 0f, 1f) * (n - 1);
         int i = Math.Min((int)p, n - 2);
-        return Blend(_colors[i], _colors[i + 1], p - i);
+        return Blend(Fixed(i), Fixed(i + 1), p - i);
     }
+
+    private Rgb Fixed(int i) => _random[i] ? Rgb.FromHsv(Hash(~(long)i) * 360, 1, 1) : _colors[i];
 
     private void ClearCache() => Array.Fill(_cacheSlot, long.MinValue);
 

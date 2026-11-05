@@ -14,7 +14,7 @@ public static class EffectFactory
         audio ??= SilentAudio.Instance;
         string variation = (s.Variation ?? "off").ToLowerInvariant();
         float amount = Math.Clamp(s.VariationAmount, 0f, 180f);
-        var palette = new Palette(s.PaletteOrDefault().Take(MaxColors).Select(TryParse).OfType<Rgb>())
+        var palette = new Palette(Entries(s.PaletteOrDefault().Take(MaxColors)))
         {
             RandomBands = variation == "random" && amount > 0,
             Variation = amount,
@@ -47,6 +47,19 @@ public static class EffectFactory
         float b = Math.Clamp(s.Brightness, 0f, 1f);
         return b >= 0.999f ? e : new BrightnessEffect(e, b);
     }
+
+    /// <summary>Palette entries: "random" becomes null (a random color); entries that do not parse are dropped.</summary>
+    private static IEnumerable<Rgb?> Entries(IEnumerable<string> colors)
+    {
+        foreach (var c in colors)
+        {
+            if (string.Equals(c, RandomColor, StringComparison.OrdinalIgnoreCase)) { yield return null; continue; }
+            if (TryParse(c) is { } rgb) yield return rgb;
+        }
+    }
+
+    /// <summary>Palette entry for a color that is random each time its turn comes round.</summary>
+    public const string RandomColor = "random";
 
     private static Rgb? TryParse(string hex)
     {
