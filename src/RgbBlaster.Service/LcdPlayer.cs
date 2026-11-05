@@ -69,9 +69,9 @@ public sealed class LcdPlayer : IDisposable
     public void SetBrightness(byte percent) { _brightness = Math.Min(percent, (byte)100); _wake.Set(); }
     public void SetRotation(byte quarterTurns) { _rotation = (byte)(quarterTurns & 3); _wake.Set(); }
 
-    private volatile int _minFrameMs = 500;
+    private volatile int _minFrameMs = 1000;
     /// <summary>Limits frames sent to the device. Media skips frames to keep its speed; screens render less often.</summary>
-    public void SetMaxFps(float fps) { _minFrameMs = (int)(1000 / Math.Clamp(float.IsFinite(fps) ? fps : 2, 0.5f, 10f)); _wake.Set(); }
+    public void SetMaxFps(float fps) { _minFrameMs = (int)(1000 / Math.Clamp(float.IsFinite(fps) ? fps : 1, 0.5f, 10f)); _wake.Set(); }
 
     /// <summary>True returns the screen to the AIO's own content and stops sending frames; false takes it back.</summary>
     public void HandBack(bool on) { _handBack = on; _wake.Set(); }

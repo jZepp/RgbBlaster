@@ -804,7 +804,7 @@ const lcd = {
     $('#lcd-bright-val').textContent = `${this.cfg.brightness}%`;
     b.oninput = () => { this.cfg.brightness = +b.value; $('#lcd-bright-val').textContent = `${b.value}%`; this.push(); };
     const f = $('#lcd-fps'), fpsText = v => `${(+v).toFixed(1)} per second`;
-    this.cfg.maxFps ??= 2;
+    this.cfg.maxFps ??= 1;
     f.value = this.cfg.maxFps;
     $('#lcd-fps-val').textContent = fpsText(this.cfg.maxFps);
     f.oninput = () => { this.cfg.maxFps = +f.value; $('#lcd-fps-val').textContent = fpsText(f.value); this.push(); };
