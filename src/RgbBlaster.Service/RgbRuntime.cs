@@ -191,7 +191,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
 
     private AppConfig LoopConfig() => new()
     {
-        FrameRate = config.FrameRate,
+        FrameRate = _settings.LightingFps ?? config.FrameRate,
         CanvasWidth = config.CanvasWidth,
         CanvasHeight = config.CanvasHeight,
         Layout = _settings.Layout,
@@ -398,6 +398,19 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
             store.Save(_settings);
         }
     }
+
+    public void SetLightingFps(int fps)
+    {
+        lock (_gate)
+        {
+            _settings.LightingFps = Math.Clamp(fps, 10, 60);
+            if (_loop is not null) _loop.FrameRate = _settings.LightingFps.Value;
+            store.Save(_settings);
+        }
+    }
+
+    /// <summary>Lighting frames per second in use.</summary>
+    public int LightingFps() { lock (_gate) return _settings.LightingFps ?? config.FrameRate; }
 
     public void SetLcd(LcdSettings lcd)
     {

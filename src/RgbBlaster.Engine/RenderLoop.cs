@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 using RgbBlaster.Core;
 
 namespace RgbBlaster.Engine;
@@ -13,7 +14,7 @@ public sealed class RenderLoop : IDisposable
     private sealed record Binding(int ZoneIndex, int[] PixelIndex, Rgb[] Scratch);
 
     private readonly Canvas _canvas;
-    private readonly int _frameRate;
+    private volatile int _frameRate;
     private readonly List<(IRgbDevice Device, Binding[] Zones, DeviceWorker Worker)> _targets = [];
     private volatile IEffect _effect;
     private Thread? _thread;
@@ -43,6 +44,9 @@ public sealed class RenderLoop : IDisposable
     }
 
     public IEffect Effect { get => _effect; set => _effect = value; }
+
+    /// <summary>Frames per second, 1..240. Takes effect from the next frame.</summary>
+    public int FrameRate { get => _frameRate; set => _frameRate = Math.Clamp(value, 1, 240); }
 
     public double LastRenderMs { get; private set; }
 
@@ -82,8 +86,8 @@ public sealed class RenderLoop : IDisposable
     private void Run()
     {
         var clock = Stopwatch.StartNew();
-        long frameTicks = Stopwatch.Frequency / _frameRate;
         long next = clock.ElapsedTicks;
+        using var timer = new FrameTimer();
 
         IEffect? notified = null;
         while (_running)
@@ -110,12 +114,11 @@ public sealed class RenderLoop : IDisposable
             }
             LastRenderMs = (clock.ElapsedTicks - start) * 1000.0 / Stopwatch.Frequency;
 
-            next += frameTicks;
+            next += Stopwatch.Frequency / _frameRate;
             long wait = next - clock.ElapsedTicks;
             if (wait < 0) { next = clock.ElapsedTicks; continue; } // overran; drop the backlog
-            int ms = (int)(wait * 1000 / Stopwatch.Frequency);
-            if (ms > 1) Thread.Sleep(ms - 1);
-            while (clock.ElapsedTicks < next) Thread.SpinWait(50);
+            // No busy-wait: a frame that starts a fraction of a millisecond late is not visible on LEDs.
+            timer.Wait(TimeSpan.FromTicks(wait * TimeSpan.TicksPerSecond / Stopwatch.Frequency));
         }
     }
 
@@ -165,4 +168,50 @@ public sealed class DeviceWorker : IDisposable
         _thread.Join(1000);
         _signal.Dispose();
     }
+}
+
+/// <summary>
+/// Sleeps with about 1 ms accuracy. Thread.Sleep follows the system timer, which is often 15.6 ms on Windows;
+/// a high-resolution waitable timer does not. Falls back to Thread.Sleep where that timer is unavailable.
+/// </summary>
+internal sealed partial class FrameTimer : IDisposable
+{
+    private readonly IntPtr _handle;
+
+    public FrameTimer()
+    {
+        // CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS. Windows 10 1803 and later.
+        if (OperatingSystem.IsWindows()) _handle = CreateWaitableTimerExW(IntPtr.Zero, null, 0x2, 0x1F0003);
+    }
+
+    public void Wait(TimeSpan delay)
+    {
+        if (delay <= TimeSpan.Zero) return;
+        if (_handle != IntPtr.Zero)
+        {
+            long due = -delay.Ticks; // negative: relative time in 100 ns units
+            if (SetWaitableTimer(_handle, ref due, 0, IntPtr.Zero, IntPtr.Zero, false))
+            {
+                WaitForSingleObject(_handle, 0xFFFFFFFF);
+                return;
+            }
+        }
+        Thread.Sleep(delay);
+    }
+
+    public void Dispose() { if (_handle != IntPtr.Zero) CloseHandle(_handle); }
+
+    [LibraryImport("kernel32.dll", StringMarshalling = StringMarshalling.Utf16)]
+    private static partial IntPtr CreateWaitableTimerExW(IntPtr attributes, string? name, uint flags, uint access);
+
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool SetWaitableTimer(IntPtr timer, ref long dueTime, int period, IntPtr completion, IntPtr arg, [MarshalAs(UnmanagedType.Bool)] bool resume);
+
+    [LibraryImport("kernel32.dll")]
+    private static partial uint WaitForSingleObject(IntPtr handle, uint milliseconds);
+
+    [LibraryImport("kernel32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool CloseHandle(IntPtr handle);
 }

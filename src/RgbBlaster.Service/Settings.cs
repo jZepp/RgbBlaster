@@ -10,6 +10,8 @@ public sealed class RuntimeSettings
     public List<Profile> Profiles { get; set; } = [];
     /// <summary>Where each zone sits in the case. Shared by all profiles.</summary>
     public List<ZonePlacement> Layout { get; set; } = [];
+    /// <summary>Lighting frames per second, 10..60. Null uses FrameRate from rgbblaster.json. Shared by all profiles.</summary>
+    public int? LightingFps { get; set; }
 }
 
 public sealed class Profile

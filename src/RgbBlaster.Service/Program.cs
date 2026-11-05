@@ -1,4 +1,4 @@
-﻿using RgbBlaster.Core;
+using RgbBlaster.Core;
 using RgbBlaster.Engine;
 using RgbBlaster.Service;
 
@@ -90,6 +90,8 @@ api.MapPut("/effect", (EffectSpec spec) => Guard(() => { rt().SetEffect(spec); r
 api.MapGet("/keyboard/modes", () => RgbBlaster.Drivers.EVision.EVisionProtocol.Modes.Select(m => new { mode = m.Mode, name = m.Name }));
 api.MapPut("/keyboard", (KeyboardSettings k) => Guard(() => { rt().SetKeyboard(k); return Results.NoContent(); }));
 api.MapPut("/fancurves", (List<FanCurveConfig> curves) => Guard(() => Results.Ok(new { warnings = rt().SetFanCurves(curves) })));
+api.MapGet("/lighting/fps", () => new { fps = rt().LightingFps() });
+api.MapPut("/lighting/fps", (FpsBody b) => Guard(() => { rt().SetLightingFps(b.Fps); return Results.NoContent(); }));
 api.MapPut("/layout", (List<ZonePlacement> layout) => Guard(() => { rt().SetLayout(layout); return Results.NoContent(); }));
 
 api.MapPost("/profiles", (ProfileName p) => Guard(() => { rt().SaveProfileAs(p.Name); return Results.NoContent(); }));
@@ -139,3 +141,4 @@ static string MediaType(string path) => Path.GetExtension(path).ToLowerInvariant
 };
 
 record ProfileName(string Name);
+record FpsBody(int Fps);

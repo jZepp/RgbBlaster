@@ -222,6 +222,14 @@ const lighting = {
   view: null,
   spec: null,
   push: debounce(spec => act(api.send('PUT', '/api/effect', spec)), 120),
+  pushFps: debounce(fps => act(api.send('PUT', '/api/lighting/fps', { fps })), 200),
+  async rate() {
+    const s = $('#light-fps'), text = v => `${v} per second`;
+    const { fps } = await api.get('/api/lighting/fps');
+    s.value = fps;
+    $('#light-fps-val').textContent = text(fps);
+    s.oninput = () => { $('#light-fps-val').textContent = text(s.value); this.pushFps(+s.value); };
+  },
   enter() {
     if (!this.view) this.view = makeCaseView($('#light-case'));
     this.spec = structuredClone(activeProfile().effect);
@@ -229,6 +237,7 @@ const lighting = {
       this.spec.colors = this.spec.type === 'cycle' ? [...PALETTES.Rainbow] : [this.spec.color, this.spec.color2];
     this.kb = structuredClone(activeProfile().keyboard ?? { mode: null, color: '#ffffff', speed: 3, random: false });
     this.render();
+    this.rate();
     if (!this.kbModes) api.get('/api/keyboard/modes').then(m => { this.kbModes = m; this.renderKeyboard(); });
     else this.renderKeyboard();
   },
