@@ -339,8 +339,12 @@ const layout = {
   draw() {
     const svg = $('#layout-svg');
     svg.replaceChildren(s('rect', { x: 8, y: 8, width: 984, height: 609, rx: 18, class: 'case-outline' }));
-    const lab = (x, y, t, anchor) => { const e = s('text', { x, y, class: 'case-label', 'text-anchor': anchor }); e.textContent = t; return e; };
-    svg.append(lab(24, 40, 'FRONT', 'start'), lab(976, 40, 'REAR', 'end'), lab(500, 40, 'TOP', 'middle'), lab(500, 605, 'BOTTOM', 'middle'));
+    // Each side is named at the middle of its own edge; front and rear read along the edge.
+    const lab = (x, y, t, turn = 0) => {
+      const e = s('text', { x, y, class: 'case-label', 'text-anchor': 'middle', 'dominant-baseline': 'middle', transform: turn ? `rotate(${turn} ${x} ${y})` : '' });
+      e.textContent = t; return e;
+    };
+    svg.append(lab(500, 30, 'TOP'), lab(500, 597, 'BOTTOM'), lab(28, 312, 'FRONT', -90), lab(972, 312, 'REAR', 90));
     this.shapes = s('g'); this.dots = s('g');
     svg.append(this.shapes, this.dots);
     for (const p of this.work) this.shapes.append(this.shape(p));
@@ -412,6 +416,65 @@ const layout = {
       const t = s('text', { x: (p.x + p.x2) / 2 * VW, y: (p.y + p.y2) / 2 * VH - 14, class: 'zone-label', 'text-anchor': 'middle' }); t.textContent = name; g.append(t);
     }
     return g;
+  },
+  // Rotate or mirror placed zones as one rigid group, about the centre of the group.
+  // Use when the real LED orientation of a device is not known: turn or flip until the preview matches the hardware.
+  orientControls(members) {
+    const go = op => { this.orient(members, op); this.draw(); this.refreshPoints(); this.editor(); };
+    return [
+      h('div', { class: 'field' }, 'Rotate', h('div', { class: 'seg' },
+        ...[[-90, '↺ 90°'], [-15, '↺ 15°'], [15, '↻ 15°'], [90, '↻ 90°']].map(([d, t]) => h('button', { onclick: () => go({ rotate: d }) }, t)))),
+      h('div', { class: 'field' }, 'Mirror', h('div', { class: 'seg' },
+        h('button', { onclick: () => go({ flip: 'h' }) }, '⇆ Left–right'),
+        h('button', { onclick: () => go({ flip: 'v' }) }, '⇅ Top–bottom'))),
+    ];
+  },
+  orient(members, op) {
+    if (!members.length) return;
+    const norm = a => { a = ((a % 360) + 540) % 360 - 180; return a === -180 ? 180 : a; };
+    // Centre of the group, from ring centres (every fan) and line or grid end points.
+    const pts = members.flatMap(q => q.shape === 'Ring'
+      ? Array.from({ length: Math.max(1, q.fans || 1) }, (_, i) => [q.x + i * (q.fanDx || 0), q.y + i * (q.fanDy || 0)])
+      : [[q.x, q.y], [q.x2, q.y2]]);
+    const cx = (Math.min(...pts.map(t => t[0])) + Math.max(...pts.map(t => t[0]))) / 2;
+    const cy = (Math.min(...pts.map(t => t[1])) + Math.max(...pts.map(t => t[1]))) / 2;
+    // Rotation is done in canvas pixels, so shapes keep their proportions on the wide canvas.
+    const r = (op.rotate ?? 0) * Math.PI / 180, cos = Math.cos(r), sin = Math.sin(r);
+    const vec = (dx, dy) => { const px = dx * VW, py = dy * VH; return [(px * cos - py * sin) / VW, (px * sin + py * cos) / VH]; };
+    const pt = (x, y) => {
+      if (op.flip === 'h') return [2 * cx - x, y];
+      if (op.flip === 'v') return [x, 2 * cy - y];
+      const [dx, dy] = vec(x - cx, y - cy); return [cx + dx, cy + dy];
+    };
+    for (const q of members) {
+      if (q.shape === 'Ring') {
+        [q.x, q.y] = pt(q.x, q.y);
+        if (op.flip === 'h') { q.fanDx = -(q.fanDx || 0); q.rotation = norm(-(q.rotation ?? 0)); q.reverse = !q.reverse; }
+        else if (op.flip === 'v') { q.fanDy = -(q.fanDy || 0); q.rotation = norm(180 - (q.rotation ?? 0)); q.reverse = !q.reverse; }
+        else { [q.fanDx, q.fanDy] = vec(q.fanDx || 0, q.fanDy || 0); q.rotation = norm((q.rotation ?? 0) + op.rotate); }
+      } else if (q.shape === 'Grid' && op.rotate) {
+        // A grid keeps its box and turns about its own centre, which moves with the group.
+        const hx = (q.x2 - q.x) / 2, hy = (q.y2 - q.y) / 2;
+        const [mx, my] = pt(q.x + hx, q.y + hy);
+        q.x = mx - hx; q.y = my - hy; q.x2 = mx + hx; q.y2 = my + hy;
+        q.rotation = norm((q.rotation ?? 0) + op.rotate);
+      } else {
+        [q.x, q.y] = pt(q.x, q.y); [q.x2, q.y2] = pt(q.x2, q.y2);
+        if (q.shape === 'Grid') q.rotation = norm(-(q.rotation ?? 0));
+      }
+    }
+    // Shift the whole group back onto the map if the turn pushed part of it off.
+    const after = members.flatMap(q => q.shape === 'Ring'
+      ? Array.from({ length: Math.max(1, q.fans || 1) }, (_, i) => [q.x + i * (q.fanDx || 0), q.y + i * (q.fanDy || 0)])
+      : [[q.x, q.y], [q.x2, q.y2]]);
+    const shift = vals => { const lo = Math.min(...vals), hi = Math.max(...vals); return lo < 0 ? -lo : hi > 1 ? Math.max(1 - hi, -lo) : 0; };
+    const sx = shift(after.map(t => t[0])), sy = shift(after.map(t => t[1]));
+    const r3 = v => +v.toFixed(4);
+    for (const q of members) {
+      q.x = r3(q.x + sx); q.y = r3(q.y + sy);
+      if (q.shape !== 'Ring') { q.x2 = r3(q.x2 + sx); q.y2 = r3(q.y2 + sy); }
+      else { q.fanDx = r3(q.fanDx || 0); q.fanDy = r3(q.fanDy || 0); }
+    }
   },
   toSvg(e) {
     const r = $('#layout-svg').getBoundingClientRect();
@@ -487,7 +550,8 @@ const layout = {
       const turn = deg => { for (const q of members) q.rotation = (((q.rotation ?? 0) + deg + 540) % 360) - 180; this.draw(); this.refreshPoints(); };
       box.replaceChildren(
         h('p', { class: 'muted' }, `${this.group.size} zones selected (${placed} placed). Drag any of them to move the group. Click one zone to edit it alone.`),
-        h('div', { class: 'field' }, 'Turn LEDs of every selected zone', h('div', { class: 'seg' },
+        ...this.orientControls(members),
+        h('div', { class: 'field' }, 'Turn LED 1 of every selected ring', h('div', { class: 'seg' },
           ...[[-15, '↺ 15°'], [-5, '↺ 5°'], [5, '↻ 5°'], [15, '↻ 15°']].map(([d, t]) => h('button', { onclick: () => turn(d) }, t)))));
       return;
     }
@@ -521,7 +585,8 @@ const layout = {
     box.replaceChildren(
       h('div', { class: 'card-head' }, h('h2', {}, info?.name ?? z), h('button', { class: 'btn small danger', onclick: () => { this.work = this.work.filter(x => x !== p); this.refresh(); this.refreshPoints(); } }, 'Remove')),
       h('label', { class: 'field' }, 'Shape', shapeSel),
-      h('div', { class: 'curve-meta' }, ...fields));
+      h('div', { class: 'curve-meta' }, ...fields),
+      ...this.orientControls([p]));
   },
 };
 $('#layout-svg').addEventListener('pointermove', e => layout.move(e));
