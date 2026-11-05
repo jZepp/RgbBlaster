@@ -31,7 +31,7 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
     /// <summary>Entry changes within one settle window that hand the bar to its built-in wave instead of following the effect.</summary>
     public const int SideUnstableChanges = 3;
     private const int ReplyTimeoutMs = 200;
-    private const int SideUnset = -3, SideWave = -2, SideOff = -1;
+    private const int SideUnset = -4, SideCycle = -3, SideWave = -2, SideOff = -1;
 
     private readonly IHidTransport _io;
     private readonly int _keySettleMs, _sideSettleMs, _storeIntervalMs;
@@ -47,6 +47,7 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
     private bool _sentValid;
 
     private NativeEffect _nativeRequested;
+    private NativeEffect? _override;        // user-chosen firmware mode; wins over the running effect
     private NativeEffect? _nativeApplied;   // null: mode not written yet this session
 
     private Rgb _sideStaged;
@@ -95,6 +96,15 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
         lock (_stage) _nativeRequested = effect;
     }
 
+    /// <summary>Runs a built-in mode regardless of the effect. Null follows the effect again.</summary>
+    public void SetFirmwareMode(byte? mode, Rgb color, byte speed, bool random)
+    {
+        lock (_stage)
+            _override = mode is byte m
+                ? new NativeEffect(NativeEffectKind.Firmware, color, Mode: m, Speed: Math.Min(speed, P.SpeedSlowest), Random: random)
+                : null;
+    }
+
     public void SetZone(int zoneIndex, ReadOnlySpan<Rgb> colors)
     {
         lock (_stage)
@@ -120,7 +130,7 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
         lock (_ioLock)
         {
             NativeEffect native;
-            lock (_stage) native = _nativeRequested;
+            lock (_stage) native = _override ?? _nativeRequested;
             if (native != _nativeApplied)
             {
                 if (CanStore()) ApplyNative(native);
@@ -129,7 +139,13 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
             if (native.Kind != NativeEffectKind.None)
             {
                 // The side bar follows a firmware effect too; written after the mode, once the cap allows.
-                WriteSide(native.Kind == NativeEffectKind.Rainbow ? SideWave : P.SideBarIndex(native.Color) ?? SideOff);
+                WriteSide(native.Kind switch
+                {
+                    NativeEffectKind.Rainbow => SideWave,
+                    NativeEffectKind.Cycle => SideCycle,
+                    NativeEffectKind.Firmware when native.Random => SideWave,
+                    _ => P.SideBarIndex(native.Color) ?? SideOff,
+                });
                 return;
             }
 
@@ -150,6 +166,15 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
         {
             case NativeEffectKind.Rainbow:
                 WriteMode(P.ModeColorWave, Speed(e.PeriodSeconds), Rgb.White, true);
+                break;
+            case NativeEffectKind.Cycle:
+                WriteMode(P.ModeSpectrumCycle, Speed(e.PeriodSeconds), Rgb.White, false);
+                break;
+            case NativeEffectKind.Firmware:
+                WriteMode(e.Mode, e.Speed, e.Color, e.Random);
+                break;
+            case NativeEffectKind.Wave:
+                WriteMode(P.ModeColorWave, Speed(e.PeriodSeconds), e.Color, false);
                 break;
             case NativeEffectKind.Breathe:
                 WriteMode(P.ModeBreathing, Speed(e.PeriodSeconds), e.Color, false);
@@ -228,6 +253,7 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
         if (state == _sideSent || !CanStore()) return;
         if (state == SideOff) WriteConfig(P.SideBarModeAddress, [P.SideBarModeOff]);
         else if (state == SideWave) WriteConfig(P.SideBarModeAddress, [P.SideBarModeWave]);
+        else if (state == SideCycle) WriteConfig(P.SideBarModeAddress, [P.SideBarModeCycle]);
         else WriteConfig(P.SideBarModeAddress, [P.SideBarModeStatic, 0x00, (byte)state]);
         _sideSent = state;
         _sentValid = false; // the config write reloads the keyboard's lighting; resend all keys

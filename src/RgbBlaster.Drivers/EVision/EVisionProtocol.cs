@@ -22,12 +22,22 @@ public static class EVisionProtocol
     public const int LedCount = 126;
     public const int ColorBufferLength = LedCount * 3; // 7 packets of 54 bytes
     public const byte ModeColorWave = 0x02;   // firmware wave; with the random flag it is a rainbow
+    public const byte ModeSpectrumCycle = 0x04;
     public const byte ModeBreathing = 0x05;
     public const byte ModeStatic = 0x06;
     public const byte ModeCustom = 0x14;      // per-key colors; the keyboard stores them on every write (visible flash)
     public const byte SpeedFastest = 0x00, SpeedSlowest = 0x05;
     public const byte BrightnessMax = 0x04;
     public const byte SpeedNormal = 0x03;
+
+    /// <summary>Built-in modes (OpenRGB names). Reactive modes light keys as they are pressed.</summary>
+    public static readonly IReadOnlyList<(byte Mode, string Name)> Modes =
+    [
+        (0x01, "Color wave (short)"), (0x02, "Color wave (long)"), (0x03, "Color wheel"), (0x04, "Spectrum cycle"),
+        (0x05, "Breathing"), (0x06, "Static"), (0x07, "Reactive"), (0x08, "Reactive ripple"), (0x09, "Reactive line"),
+        (0x0A, "Starlight (fast)"), (0x0B, "Blooming"), (0x0C, "Rainbow wave (vertical)"), (0x0D, "Hurricane"),
+        (0x0E, "Accumulate"), (0x0F, "Starlight (slow)"), (0x10, "Visor"), (0x11, "Surmount"), (0x12, "Rainbow wave (circle)"),
+    ];
 
     // K580 side light bar (left edge). Stored config, written with CmdSetParameter. Found by diffing config reads and testing on hardware.
     public const byte SideBarModeAddress = 0x14;

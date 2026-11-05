@@ -116,6 +116,52 @@ public class EVisionTests
     }
 
     [Fact]
+    public void NativeCycleUsesSpectrumCycleAndSideBarCycle()
+    {
+        var hw = new FakeEVision();
+        var dev = Opened(hw);
+        dev.SetNativeEffect(new NativeEffect(NativeEffectKind.Cycle, PeriodSeconds: 5));
+        dev.Flush();
+        dev.Flush();
+        var mode = hw.Writes.Single(w => w[3] == P.CmdSetParameter && w[5] == 0);
+        Assert.Equal(P.ModeSpectrumCycle, mode[8]);
+        var side = hw.Writes.Single(w => w[3] == P.CmdSetParameter && w[5] == P.SideBarModeAddress);
+        Assert.Equal(P.SideBarModeCycle, side[8]);
+    }
+
+    [Fact]
+    public void FirmwareModeOverridesTheEffectUntilCleared()
+    {
+        var hw = new FakeEVision();
+        var dev = Opened(hw);
+        dev.SetNativeEffect(new NativeEffect(NativeEffectKind.Rainbow, PeriodSeconds: 5));
+        dev.SetFirmwareMode(0x0D, new Rgb(0, 0, 255), 2, false);
+        dev.Flush();
+        dev.Flush();
+        var mode = hw.Writes.Single(w => w[3] == P.CmdSetParameter && w[5] == 0);
+        Assert.Equal([0x0D, P.BrightnessMax, 2, 0, 0, 0, 0, 255], mode[8..16]);
+
+        hw.Writes.Clear();
+        dev.SetFirmwareMode(null, default, 0, false);
+        dev.Flush();
+        Assert.Equal(P.ModeColorWave, hw.Writes.Single(w => w[3] == P.CmdSetParameter && w[5] == 0)[8]);
+    }
+
+    [Fact]
+    public void NativeWaveUsesSingleColorFirmwareWave()
+    {
+        var hw = new FakeEVision();
+        var dev = Opened(hw);
+        dev.SetNativeEffect(new NativeEffect(NativeEffectKind.Wave, new Rgb(0, 0, 255), 4));
+        dev.Flush();
+        dev.Flush();
+        var mode = hw.Writes.Single(w => w[3] == P.CmdSetParameter && w[5] == 0);
+        Assert.Equal([P.ModeColorWave, P.BrightnessMax, EVisionKeyboardDevice.Speed(4), 0, 0, 0, 0, 255], mode[8..16]);
+        var side = hw.Writes.Single(w => w[3] == P.CmdSetParameter && w[5] == P.SideBarModeAddress);
+        Assert.Equal([P.SideBarModeStatic, 0, 5], side[8..11]);
+    }
+
+    [Fact]
     public void SideBarIndexPicksNearestPaletteEntry()
     {
         Assert.Null(P.SideBarIndex(Rgb.Black));

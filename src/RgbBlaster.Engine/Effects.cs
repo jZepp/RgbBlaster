@@ -47,6 +47,7 @@ public sealed class BreathingEffect(Rgb color, float periodSeconds = 4f) : IEffe
 public sealed class WaveEffect(Rgb a, Rgb b, float speedHz, float angleDegrees, float wavelengths) : IEffect
 {
     public string Name => "wave";
+    public NativeEffect Native => new(NativeEffectKind.Wave, a, speedHz > 0 ? 1f / speedHz : 0);
 
     public void Render(Canvas canvas, double t)
     {
@@ -74,6 +75,7 @@ public sealed class WaveEffect(Rgb a, Rgb b, float speedHz, float angleDegrees, 
 public sealed class RadialEffect(Rgb a, Rgb b, float speedHz, float rings, float cx, float cy) : IEffect
 {
     public string Name => "radial";
+    public NativeEffect Native => new(NativeEffectKind.Wave, a, speedHz > 0 ? 1f / speedHz : 0);
 
     public void Render(Canvas canvas, double t)
     {
@@ -97,6 +99,7 @@ public sealed class RadialEffect(Rgb a, Rgb b, float speedHz, float rings, float
 public sealed class ColorCycleEffect(float speedHz) : IEffect
 {
     public string Name => "cycle";
+    public NativeEffect Native => new(NativeEffectKind.Cycle, PeriodSeconds: speedHz > 0 ? 1f / speedHz : 0);
     public void Render(Canvas canvas, double t) => canvas.Fill(Rgb.FromHsv((float)(t * speedHz * 360.0), 1f, 1f));
 }
 

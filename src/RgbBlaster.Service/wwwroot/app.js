@@ -213,7 +213,27 @@ const lighting = {
   enter() {
     if (!this.view) this.view = makeCaseView($('#light-case'));
     this.spec = structuredClone(activeProfile().effect);
+    this.kb = structuredClone(activeProfile().keyboard ?? { mode: null, color: '#ffffff', speed: 3, random: false });
     this.render();
+    if (!this.kbModes) api.get('/api/keyboard/modes').then(m => { this.kbModes = m; this.renderKeyboard(); });
+    else this.renderKeyboard();
+  },
+  pushKb: debounce(kb => act(api.send('PUT', '/api/keyboard', kb)), 300),
+  renderKeyboard() {
+    const kb = this.kb, modes = this.kbModes ?? [];
+    const set = (k, v, redraw) => { kb[k] = v; activeProfile().keyboard = structuredClone(kb); this.pushKb(kb); if (redraw) this.renderKeyboard(); };
+    const sel = h('select', { onchange: e => set('mode', e.target.value === '' ? null : +e.target.value, true) },
+      h('option', { value: '', selected: kb.mode == null }, 'Follow the lighting effect'),
+      ...modes.map(m => h('option', { value: m.mode, selected: kb.mode === m.mode }, m.name)));
+    const kids = [h('label', { class: 'field' }, 'Mode', sel)];
+    if (kb.mode != null) {
+      const val = h('span', { class: 'val' }, `${kb.speed} (0 fastest, 5 slowest)`);
+      kids.push(
+        h('label', { class: 'field-row' }, 'Random colors', h('input', { type: 'checkbox', checked: kb.random, onchange: e => set('random', e.target.checked, true) })),
+        kb.random ? null : h('label', { class: 'field-row' }, 'Color', h('input', { type: 'color', value: kb.color, oninput: e => set('color', e.target.value) })),
+        h('label', { class: 'field' }, 'Speed', val, h('input', { type: 'range', min: 0, max: 5, step: 1, value: kb.speed, oninput: e => { val.textContent = `${e.target.value} (0 fastest, 5 slowest)`; set('speed', +e.target.value); } })));
+    }
+    $('#kb-params').replaceChildren(...kids.filter(Boolean));
   },
   render() {
     const grid = $('#effect-grid');

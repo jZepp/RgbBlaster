@@ -5,6 +5,16 @@ using RgbBlaster.Service;
 var builder = WebApplication.CreateBuilder(new WebApplicationOptions { Args = args, ContentRootPath = AppContext.BaseDirectory });
 var config = AppConfig.Load(Path.Combine(AppContext.BaseDirectory, "rgbblaster.json"));
 bool simulate = args.Contains("--simulate");
+
+// Hosted services start before Kestrel binds its port, so a second copy would open the devices before it fails.
+// One hardware instance per machine; simulation is not limited.
+bool first = true;
+using var instance = simulate ? null : new Mutex(true, @"Global\RgbBlaster.Service", out first);
+if (!first)
+{
+    Console.Error.WriteLine("RgbBlaster service is already running. Stop it first (Ctrl+C in its window, or stop the Windows service).");
+    return 1;
+}
 var dataDir = simulate
     ? Path.Combine(AppContext.BaseDirectory, "sim-data")
     : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "RgbBlaster");
@@ -48,7 +58,8 @@ app.Use(async (ctx, next) =>
     await next();
 });
 app.UseDefaultFiles();
-app.UseStaticFiles();
+// no-cache: the browser revalidates, so a new build's GUI loads without a forced reload.
+app.UseStaticFiles(new StaticFileOptions { OnPrepareResponse = c => c.Context.Response.Headers.CacheControl = "no-cache" });
 
 var api = app.MapGroup("/api");
 RgbRuntime rt() => app.Services.GetRequiredService<RgbRuntime>();
@@ -57,7 +68,7 @@ static IResult Guard(Func<IResult> f)
 {
     try { return f(); }
     catch (KeyNotFoundException ex) { return Results.NotFound(new { error = $"Not found: {ex.Message}" }); }
-    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException) { return Results.BadRequest(new { error = ex.Message }); }
+    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or FormatException) { return Results.BadRequest(new { error = ex.Message }); }
 }
 
 api.MapGet("/status", () => Results.Json(rt().Status()));
@@ -76,6 +87,8 @@ api.MapGet("/preview", (int? w, int? h) =>
 });
 
 api.MapPut("/effect", (EffectSpec spec) => Guard(() => { rt().SetEffect(spec); return Results.NoContent(); }));
+api.MapGet("/keyboard/modes", () => RgbBlaster.Drivers.EVision.EVisionProtocol.Modes.Select(m => new { mode = m.Mode, name = m.Name }));
+api.MapPut("/keyboard", (KeyboardSettings k) => Guard(() => { rt().SetKeyboard(k); return Results.NoContent(); }));
 api.MapPut("/fancurves", (List<FanCurveConfig> curves) => Guard(() => Results.Ok(new { warnings = rt().SetFanCurves(curves) })));
 api.MapPut("/layout", (List<ZonePlacement> layout) => Guard(() => { rt().SetLayout(layout); return Results.NoContent(); }));
 
@@ -108,6 +121,7 @@ api.MapPost("/lcd/media", async (HttpRequest req) =>
 }).DisableAntiforgery();
 
 app.Run();
+return 0;
 
 static string MediaType(string path) => Path.GetExtension(path).ToLowerInvariant() switch
 {

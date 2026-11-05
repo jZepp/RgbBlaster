@@ -1,3 +1,4 @@
+using RgbBlaster.Drivers.EVision;
 ﻿using RgbBlaster.Core;
 using RgbBlaster.Drivers;
 using RgbBlaster.Drivers.Lcd;
@@ -93,6 +94,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
         _loop = new RenderLoop(LoopConfig(), _devices, EffectFactory.Create(profile.Effect));
         _loop.Start();
         ApplyLcdUnlocked(profile.Lcd);
+        ApplyKeyboardUnlocked(profile.Keyboard);
         Note($"Started with {_devices.Count} lighting device(s), {_fans.Count} fan channel(s).");
     }
 
@@ -283,6 +285,25 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
         }
     }
 
+    public void SetKeyboard(KeyboardSettings kb)
+    {
+        if (kb.Mode is byte m && !EVisionProtocol.Modes.Any(x => x.Mode == m)) throw new ArgumentException($"Unknown keyboard mode {m}.");
+        Rgb.Parse(kb.Color); // throws FormatException on a bad color
+        lock (_gate)
+        {
+            ApplyKeyboardUnlocked(kb);
+            ActiveProfileUnlocked().Keyboard = kb;
+            store.Save(_settings);
+        }
+    }
+
+    private void ApplyKeyboardUnlocked(KeyboardSettings kb)
+    {
+        Rgb color;
+        try { color = Rgb.Parse(kb.Color); } catch (FormatException) { color = Rgb.White; }
+        foreach (var k in _devices.OfType<EVisionKeyboardDevice>()) k.SetFirmwareMode(kb.Mode, color, kb.Speed, kb.Random);
+    }
+
     public IReadOnlyList<string> SetFanCurves(List<FanCurveConfig> curves)
     {
         foreach (var c in curves)
@@ -396,6 +417,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
                 Effect = cur.Effect.Clone(),
                 FanCurves = System.Text.Json.JsonSerializer.Deserialize<List<FanCurveConfig>>(System.Text.Json.JsonSerializer.Serialize(cur.FanCurves))!,
                 Lcd = new LcdSettings { Mode = cur.Lcd.Mode, Media = cur.Lcd.Media, Brightness = cur.Lcd.Brightness, Rotation = cur.Lcd.Rotation },
+                Keyboard = cur.Keyboard.Clone(),
             };
             _settings.Profiles.RemoveAll(p => p.Name == name);
             _settings.Profiles.Add(copy);
@@ -413,6 +435,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
             if (_loop is not null) _loop.Effect = EffectFactory.Create(p.Effect);
             _fanCtl = BuildFanController(p.FanCurves);
             ApplyLcdUnlocked(p.Lcd);
+            ApplyKeyboardUnlocked(p.Keyboard);
             store.Save(_settings);
         }
     }

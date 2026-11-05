@@ -18,6 +18,18 @@ public sealed class Profile
     public EffectSpec Effect { get; set; } = new();
     public List<FanCurveConfig> FanCurves { get; set; } = [];
     public LcdSettings Lcd { get; set; } = new();
+    public KeyboardSettings Keyboard { get; set; } = new();
+}
+
+/// <summary>A built-in keyboard mode, or null Mode to follow the lighting effect.</summary>
+public sealed class KeyboardSettings
+{
+    public byte? Mode { get; set; }
+    public string Color { get; set; } = "#ffffff";
+    /// <summary>0 fastest to 5 slowest.</summary>
+    public byte Speed { get; set; } = 3;
+    public bool Random { get; set; }
+    public KeyboardSettings Clone() => (KeyboardSettings)MemberwiseClone();
 }
 
 public sealed class LcdSettings
