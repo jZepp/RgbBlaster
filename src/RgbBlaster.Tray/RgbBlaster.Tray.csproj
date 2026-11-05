@@ -11,4 +11,7 @@
   <ItemGroup>
     <ProjectReference Include="..\RgbBlaster.Core\RgbBlaster.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="NAudio.Wasapi" Version="3.3.0" />
+  </ItemGroup>
 </Project>

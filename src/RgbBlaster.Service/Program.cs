@@ -76,6 +76,7 @@ api.MapGet("/status", () => Results.Json(rt().Status()));
 api.MapGet("/history", () => rt().History());
 api.MapGet("/messages", () => rt().Messages());
 api.MapGet("/sensors", () => rt().Sensors());
+api.MapGet("/audio", () => rt().AudioInfo());
 api.MapGet("/version", () => new { version = AppVersion.Version, commit = AppVersion.Commit });
 api.MapGet("/settings", () => rt().Settings());
 api.MapGet("/effects", () => EffectFactory.Types);

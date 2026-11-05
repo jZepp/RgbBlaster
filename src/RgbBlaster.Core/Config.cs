@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace RgbBlaster.Core;
@@ -17,6 +17,8 @@ public sealed class AppConfig
     public List<FanCurveConfig> FanCurves { get; set; } = [];
     /// <summary>Web GUI and API of the service.</summary>
     public WebConfig Web { get; set; } = new();
+    /// <summary>Sound levels sent by the tray app.</summary>
+    public AudioConfig Audio { get; set; } = new();
 
     public static readonly JsonSerializerOptions JsonOptions = new()
     {

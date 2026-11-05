@@ -207,6 +207,8 @@ const EFFECT_INFO = {
   gradient: { label: 'Gradient', params: ['palette', 'angle'] },
   matrix: { label: 'Matrix', params: ['palette', 'speed', 'density'] },
   fire: { label: 'Fire', params: ['palette', 'speed', 'height'], palette: 'Fire' },
+  spectrum: { label: 'Spectrum', params: ['palette', 'sound'], palette: 'Spectrum' },
+  beat: { label: 'Beat pulse', params: ['palette', 'ringSpeed', 'ringWidth', 'center', 'sound'] },
 };
 const MAX_COLORS = 16;
 const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
@@ -214,6 +216,7 @@ const PALETTES = {
   Rainbow: ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff'],
   Ocean: ['#00a0ff', '#00ffd0', '#0030ff', '#00e0ff'],
   Fire: ['#8a0000', '#ff2000', '#ff8000', '#ffd000', '#fff4c0'],
+  Spectrum: ['#00c040', '#a0ff00', '#ffd000', '#ff2000'],
   Synthwave: ['#ff00a0', '#a000ff', '#00d0ff'],
   Matrix: ['#00ff40', '#00c030', '#80ff80'],
   Ice: ['#ffffff', '#80e0ff', '#2080ff'],
@@ -288,6 +291,8 @@ const lighting = {
     if (want.has('palette')) kids.push(this.paletteEditor(set));
     if (want.has('color') || want.has('palette')) kids.push(...this.variationControls(set, slider));
     if (want.has('speed')) kids.push(slider('speed', 'Speed', 0.02, 2, 0.02, v => `${(1 / v).toFixed(1)} s per cycle`));
+    if (want.has('ringSpeed')) kids.push(slider('speed', 'Ring speed', 0.05, 1, 0.05, v => `crosses the case in ${(0.75 / (v * 4)).toFixed(1)} s`));
+    if (want.has('ringWidth')) { this.spec.ringWidth ??= 0.08; kids.push(slider('ringWidth', 'Ring width', 0.02, 0.4, 0.02, v => `${Math.round(v * 100)}% of the case`)); }
     if (want.has('spacing')) kids.push(slider('spacing', 'Spacing (dark between bands)', 0, 0.95, 0.05, v => v > 0 ? `${Math.round(v * 100)}% dark` : 'none'));
     if (want.has('height')) kids.push(slider('height', 'Flame height', 0.1, 1, 0.05, v => `${Math.round(v * 100)}% of the case`));
     if (want.has('density')) kids.push(slider('density', 'Density', 0.05, 1, 0.05, v => `${Math.round(v * 100)}% of columns`));
@@ -297,8 +302,40 @@ const lighting = {
       kids.push(slider('centerX', 'Center, front to rear', 0, 1, 0.01, v => `${Math.round(v * 100)}%`));
       kids.push(slider('centerY', 'Center, top to bottom', 0, 1, 0.01, v => `${Math.round(v * 100)}%`));
     }
+    kids.push(...this.soundControls(set, slider, want.has('sound')));
     kids.push(slider('brightness', 'Brightness', 0, 1, 0.05, v => `${Math.round(v * 100)}%`));
     p.replaceChildren(...kids);
+  },
+  // Sound: status for the sound effects; the "Follow sound" option for every other effect.
+  soundControls(set, slider, soundEffect) {
+    const s = this.spec, kids = [];
+    if (!soundEffect) {
+      s.sound ??= 'off'; s.soundAmount ??= 0.7;
+      kids.push(h('div', { class: 'field' }, 'Follow sound', h('div', { class: 'seg' },
+        ...[['off', 'Off'], ['brightness', 'Brightness'], ['speed', 'Speed'], ['beat', 'Flash on beat']].map(([v, t]) =>
+          h('button', { class: s.sound === v ? 'on' : '', onclick: () => { set('sound', v); this.render(); } }, t)))));
+      if (s.sound !== 'off') kids.push(slider('soundAmount', 'Sound effect strength', 0.1, 1, 0.05, v => `${Math.round(v * 100)}%`));
+    }
+    if (soundEffect || s.sound !== 'off') {
+      const line = h('div', { class: 'hint', id: 'sound-state' }, 'Checking sound…');
+      kids.push(line);
+      this.soundStatus();
+    }
+    return kids;
+  },
+  // Shows whether the tray app sends sound levels. Polled while a sound option is visible on this page.
+  async soundStatus() {
+    clearTimeout(this.soundTimer);
+    const el = $('#sound-state');
+    if (!el || $('#page-lighting').hidden) return;
+    try {
+      const a = await api.get('/api/audio');
+      const bars = a.bands.map(b => '▁▂▃▄▅▆▇█'[Math.min(7, Math.floor(b * 8))]).join('');
+      el.textContent = a.receiving ? `Sound: receiving from the tray app ${bars}`
+        : state.status?.simulated ? `Sound: simulated beat (no tray app) ${bars}`
+        : 'Sound: nothing received. Start the RgbBlaster tray app and check "React to sound" in its menu.';
+    } catch { el.textContent = 'Sound: service not reachable'; }
+    this.soundTimer = setTimeout(() => this.soundStatus(), 250);
   },
   // Hue variation of the chosen colors. "Random" needs bands, breaths or drops, so a still effect offers drift only.
   variationControls(set, slider) {

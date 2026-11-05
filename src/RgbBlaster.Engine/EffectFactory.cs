@@ -5,11 +5,13 @@ namespace RgbBlaster.Engine;
 /// <summary>Builds effects from <see cref="EffectSpec"/>. Unknown types fall back to the rainbow wave.</summary>
 public static class EffectFactory
 {
-    public static readonly IReadOnlyList<string> Types = ["solid", "breathe", "rainbow", "wave", "radial", "cycle", "gradient", "matrix", "fire"];
+    public static readonly IReadOnlyList<string> Types = ["solid", "breathe", "rainbow", "wave", "radial", "cycle", "gradient", "matrix", "fire", "spectrum", "beat"];
     public const int MaxColors = 16;
 
-    public static IEffect Create(EffectSpec s)
+    /// <param name="audio">Sound levels for the sound effects and the "follow sound" option. Null means silence.</param>
+    public static IEffect Create(EffectSpec s, IAudioSource? audio = null)
     {
+        audio ??= SilentAudio.Instance;
         string variation = (s.Variation ?? "off").ToLowerInvariant();
         float amount = Math.Clamp(s.VariationAmount, 0f, 180f);
         var palette = new Palette(s.PaletteOrDefault().Take(MaxColors).Select(TryParse).OfType<Rgb>())
@@ -31,10 +33,15 @@ public static class EffectFactory
             "gradient" => new GradientEffect(palette, s.Angle),
             "matrix" => new MatrixEffect(palette, speed, s.Density),
             "fire" => new FireEffect(palette, speed, s.Height),
+            "spectrum" => new SpectrumEffect(palette, audio),
+            "beat" => new BeatPulseEffect(palette, audio, speed, s.CenterX, s.CenterY, s.RingWidth),
             _ => new RainbowWaveEffect(speed, scale),
         };
         if (variation == "drift" && amount > 0 && e is not RainbowWaveEffect)
             e = new ColorDriftEffect(e, palette, amount, Math.Clamp(s.VariationSeconds, 1f, 600f));
+        string sound = (s.Sound ?? "off").ToLowerInvariant();
+        if (sound is "brightness" or "speed" or "beat" && s.Type is not ("spectrum" or "beat"))
+            e = new SoundFollowEffect(e, audio, sound, s.SoundAmount);
         float b = Math.Clamp(s.Brightness, 0f, 1f);
         return b >= 0.999f ? e : new BrightnessEffect(e, b);
     }

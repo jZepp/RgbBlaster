@@ -34,6 +34,15 @@ public sealed class EffectSpec
     public float VariationAmount { get; set; } = 60;
     /// <summary>Drift: seconds for one full swing.</summary>
     public float VariationSeconds { get; set; } = 20;
+    /// <summary>"off"; "brightness", "speed" or "beat": the effect follows the sound captured by the tray app.</summary>
+    public string Sound { get; set; } = "off";
+    /// <summary>0..1: how much the sound changes the effect.</summary>
+    public float SoundAmount { get; set; } = 0.7f;
+    /// <summary>Beat effect: ring width as a share of the case, 0.02..0.4.</summary>
+    public float RingWidth { get; set; } = 0.08f;
+
+    /// <summary>True when the effect needs sound levels.</summary>
+    public bool UsesSound => Type is "spectrum" or "beat" || (Sound is not null && Sound != "off");
 
     /// <summary>The palette, falling back to Color and Color2.</summary>
     public IReadOnlyList<string> PaletteOrDefault() => Colors.Count > 0 ? Colors : [Color, Color2];

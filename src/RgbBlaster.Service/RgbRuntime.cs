@@ -29,6 +29,8 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
     private BoardFanDevice? _board;
     private ITemperatureSource? _temps;
     private LcdPlayer? _lcd;
+    private AudioReceiver? _audioIn;
+    private IAudioSource _audio = SilentAudio.Instance;
     private readonly Dictionary<string, IReadOnlyList<LcdFrame>> _mediaCache = [];
 
     // Cached by the tick for request threads.
@@ -68,6 +70,8 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
     {
         _settings = store.Load(config);
         var profile = ActiveProfileUnlocked();
+        _audioIn = new AudioReceiver(config.Audio.Port, Note);
+        _audio = simulate ? new SimulatedAudio(_audioIn) : _audioIn;
 
         if (simulate)
         {
@@ -91,7 +95,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
         }
 
         _fanCtl = BuildFanController(profile.FanCurves);
-        _loop = new RenderLoop(LoopConfig(), _devices, EffectFactory.Create(profile.Effect));
+        _loop = new RenderLoop(LoopConfig(), _devices, EffectFactory.Create(profile.Effect, _audio));
         _loop.Start();
         ApplyLcdUnlocked(profile.Lcd);
         ApplyKeyboardUnlocked(profile.Keyboard);
@@ -162,6 +166,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
             try { _board?.Release(); } catch (Exception ex) { log.LogWarning("Board fan release: {Message}", ex.Message); }
             _lcd?.Dispose();
             _lcd = null;
+            _audioIn?.Dispose();
             ExitLighting(_devices, config.OnExit);
             _hm?.Dispose();
         }
@@ -341,7 +346,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
 
     public void SetEffect(EffectSpec spec)
     {
-        var effect = EffectFactory.Create(spec);
+        var effect = EffectFactory.Create(spec, _audio);
         lock (_gate)
         {
             ActiveProfileUnlocked().Effect = spec;
@@ -391,7 +396,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
         lock (_gate)
         {
             _settings.Layout = layout;
-            var effect = _loop?.Effect ?? EffectFactory.Create(ActiveProfileUnlocked().Effect);
+            var effect = _loop?.Effect ?? EffectFactory.Create(ActiveProfileUnlocked().Effect, _audio);
             _loop?.Dispose();
             _loop = new RenderLoop(LoopConfig(), _devices, effect);
             _loop.Start();
@@ -412,6 +417,15 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
 
     /// <summary>Lighting frames per second in use.</summary>
     public int LightingFps() { lock (_gate) return _settings.LightingFps ?? config.FrameRate; }
+
+    /// <summary>For the tray app: whether the active effect needs sound, and where to send it.</summary>
+    public object AudioInfo()
+    {
+        bool wanted;
+        lock (_gate) wanted = ActiveProfileUnlocked().Effect.UsesSound;
+        var f = _audio.Current;
+        return new { version = AppVersion.Display, wanted, port = config.Audio.Port, receiving = _audioIn?.Receiving ?? false, level = f.Level, bands = f.Bands };
+    }
 
     public void SetLcd(LcdSettings lcd)
     {
@@ -518,7 +532,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
         {
             var p = _settings.Profiles.FirstOrDefault(x => x.Name == name) ?? throw new KeyNotFoundException(name);
             _settings.ActiveProfile = name;
-            if (_loop is not null) _loop.Effect = EffectFactory.Create(p.Effect);
+            if (_loop is not null) _loop.Effect = EffectFactory.Create(p.Effect, _audio);
             _fanCtl = BuildFanController(p.FanCurves);
             ApplyLcdUnlocked(p.Lcd);
             ApplyKeyboardUnlocked(p.Keyboard);

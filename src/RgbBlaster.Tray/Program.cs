@@ -13,24 +13,32 @@ internal static class Program
     private const string ServiceName = "RgbBlaster";
 
     [STAThread]
-    private static void Main()
+    private static void Main(string[] args)
     {
-        using var single = new Mutex(true, @"Local\RgbBlaster.Tray", out bool first);
+        // Same rgbblaster.json as the service when installed next to it. --port overrides it, for a simulation run.
+        var configPath = Path.Combine(AppContext.BaseDirectory, "rgbblaster.json");
+        int port = File.Exists(configPath) ? AppConfig.Load(configPath).Web.Port : new WebConfig().Port;
+        int pi = Array.IndexOf(args, "--port");
+        if (pi >= 0 && pi + 1 < args.Length && int.TryParse(args[pi + 1], out int p)) port = p;
+        var url = $"http://localhost:{port}/";
+
+        using var single = new Mutex(true, $@"Local\RgbBlaster.Tray.{port}", out bool first);
         if (!first) return;
         ApplicationConfiguration.Initialize();
 
-        // Same rgbblaster.json as the service when installed next to it.
-        var configPath = Path.Combine(AppContext.BaseDirectory, "rgbblaster.json");
-        int port = File.Exists(configPath) ? AppConfig.Load(configPath).Web.Port : new WebConfig().Port;
-        var url = $"http://localhost:{port}/";
-
         using var up = MakeIcon(running: true);
         using var down = MakeIcon(running: false);
+        using var sound = new SoundCapture();
         var state = new ToolStripMenuItem("Checking the service...") { Enabled = false };
+        var soundState = new ToolStripMenuItem("Sound: off") { Enabled = false };
+        var soundOn = new ToolStripMenuItem("React to sound") { CheckOnClick = true, Checked = SoundEnabled };
         var menu = new ContextMenuStrip();
         menu.Items.Add(new ToolStripMenuItem("Open RgbBlaster", null, (_, _) => Open(url)) { Font = new Font(menu.Font, FontStyle.Bold) });
         menu.Items.Add(state);
         menu.Items.Add(new ToolStripMenuItem($"Tray version {AppVersion.Display}") { Enabled = false });
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(soundOn);
+        menu.Items.Add(soundState);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Restart service", null, (_, _) => Elevated($"Restart-Service -Name {ServiceName} -Force"));
         menu.Items.Add("Stop service", null, (_, _) => Elevated($"Stop-Service -Name {ServiceName} -Force"));
@@ -43,17 +51,38 @@ internal static class Program
 
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(2) };
         bool? last = null;
+        bool wanted = false;
+        int audioPort = 0;
+
+        // Capture runs only while the service shows an effect that uses sound and the user has not turned it off.
+        void UpdateSound()
+        {
+            if (soundOn.Checked && wanted && audioPort > 0) sound.Start(audioPort); else sound.Stop();
+            soundState.Text = !soundOn.Checked ? "Sound: off"
+                : !wanted ? "Sound: idle (no sound effect)"
+                : sound.Error is { } err ? $"Sound: error, {err}"
+                : "Sound: sending";
+        }
+        soundOn.CheckedChanged += (_, _) => { SoundEnabled = soundOn.Checked; UpdateSound(); };
+
         async void Poll()
         {
             string? version = null;
             try
             {
-                using var r = await http.GetAsync(url + "api/version");
+                using var r = await http.GetAsync(url + "api/audio");
                 if (r.IsSuccessStatusCode)
-                    version = System.Text.Json.JsonDocument.Parse(await r.Content.ReadAsStringAsync()).RootElement.GetProperty("version").GetString() ?? "?";
+                {
+                    var root = System.Text.Json.JsonDocument.Parse(await r.Content.ReadAsStringAsync()).RootElement;
+                    version = root.GetProperty("version").GetString() ?? "?";
+                    wanted = root.GetProperty("wanted").GetBoolean();
+                    audioPort = root.GetProperty("port").GetInt32();
+                }
             }
             catch { /* service not running */ }
             bool ok = version is not null;
+            if (!ok) wanted = false;
+            UpdateSound();
             if (ok == last) return;
             last = ok;
             tray.Icon = ok ? up : down;
@@ -67,6 +96,15 @@ internal static class Program
 
         Application.Run();
         tray.Visible = false;
+    }
+
+    private const string RegistryKey = @"HKEY_CURRENT_USER\Software\RgbBlaster";
+
+    /// <summary>The user's "React to sound" choice, kept per user. On by default.</summary>
+    private static bool SoundEnabled
+    {
+        get => Microsoft.Win32.Registry.GetValue(RegistryKey, "SoundCapture", 1) is not 0;
+        set => Microsoft.Win32.Registry.SetValue(RegistryKey, "SoundCapture", value ? 1 : 0);
     }
 
     private static void Open(string url) => Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
