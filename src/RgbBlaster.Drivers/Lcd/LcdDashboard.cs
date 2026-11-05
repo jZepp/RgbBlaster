@@ -64,6 +64,7 @@ public sealed class LcdDashboard : IDisposable
     private readonly Font _clock = new(Face, 120, FontStyle.Bold, GraphicsUnit.Pixel);
     private readonly Font _clockSmall = new(Face, 30, FontStyle.Regular, GraphicsUnit.Pixel);
     private readonly StringFormat _center = new() { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+    private readonly StringFormat _centerOneLine = new(StringFormatFlags.NoWrap) { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
 
     // Needle positions shown on animated screens; they ease toward the live values.
     private float _cpuShown = float.NaN, _gpuShown = float.NaN, _pumpShown = float.NaN;
@@ -233,12 +234,12 @@ public sealed class LcdDashboard : IDisposable
             ("GPU", v.GpuC is float gt ? $"{gt:F0}°" : "--"),
             ("PUMP", v.PumpRpm?.ToString() ?? "--"),
         ];
-        const float colW = 106, top = Cy + 102;
+        const float colW = 116, top = Cy + 102;
         float x0 = Cx - colW * cols.Length / 2;
         for (int i = 0; i < cols.Length; i++)
         {
             g.DrawString(cols[i].Label, _unit, Brushes.Gray, new RectangleF(x0 + i * colW, top, colW, 24), _center);
-            g.DrawString(cols[i].Value, _stat, Brushes.White, new RectangleF(x0 + i * colW, top + 20, colW, 50), _center);
+            g.DrawString(cols[i].Value, _stat, Brushes.White, new RectangleF(x0 + i * colW, top + 20, colW, 50), _centerOneLine);
         }
     }
 
@@ -471,5 +472,6 @@ public sealed class LcdDashboard : IDisposable
         _clock.Dispose();
         _clockSmall.Dispose();
         _center.Dispose();
+        _centerOneLine.Dispose();
     }
 }
