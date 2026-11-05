@@ -148,7 +148,7 @@ const dashboard = {
     if (!this.view) this.view = makeCaseView($('#dash-case'));
     const p = activeProfile();
     $('#dash-effect').textContent = p ? `${p.effect.type} · ${p.name}` : '';
-    $('#dash-lcd-mode').textContent = p?.lcd.mode === 'media' ? 'Custom screen' : `${cap(p?.lcd.screen ?? 'status')} screen`;
+    $('#dash-lcd-mode').textContent = p?.lcd.mode === 'media' ? 'Custom screen' : p?.lcd.mode === 'device' ? 'Corsair screen' : `${cap(p?.lcd.screen ?? 'status')} screen`;
     this.history();
   },
   status(st) {
@@ -642,7 +642,7 @@ const lcd = {
     b.value = this.cfg.brightness;
     $('#lcd-bright-val').textContent = `${this.cfg.brightness}%`;
     b.oninput = () => { this.cfg.brightness = +b.value; $('#lcd-bright-val').textContent = `${b.value}%`; this.push(); };
-    const lighting = this.cfg.mode !== 'media' && (this.cfg.screen ?? '').startsWith('lighting');
+    const lighting = this.cfg.mode === 'dashboard' && (this.cfg.screen ?? '').startsWith('lighting');
     $('#lcd-area-field').hidden = !lighting;
     for (const btn of $$('#lcd-area button')) {
       btn.classList.toggle('on', btn.dataset.a === (this.cfg.backgroundArea ?? 'case'));
@@ -656,10 +656,12 @@ const lcd = {
   async gallery() {
     const [media, screens] = await Promise.all([api.get('/api/lcd/media'), this.screens ??= api.get('/api/lcd/screens')]);
     const pick = (mode, id, screen) => { this.cfg.mode = mode; this.cfg.media = id; if (screen) this.cfg.screen = screen; this.gallery(); this.controls(); this.push(); };
-    const builtIn = screens.map(sc => h('div', { class: 'tile' + (this.cfg.mode !== 'media' && (this.cfg.screen ?? 'status') === sc.id ? ' on' : ''), title: sc.name, onclick: () => pick('dashboard', null, sc.id) },
+    const deviceTile = h('div', { class: 'tile dash' + (this.cfg.mode === 'device' ? ' on' : ''), title: 'The AIO shows its own screen; RgbBlaster sends nothing',
+      onclick: () => pick('device', null) }, h('div', {}, 'Corsair', h('br'), 'own screen'));
+    const builtIn = screens.map(sc => h('div', { class: 'tile' + (this.cfg.mode === 'dashboard' && (this.cfg.screen ?? 'status') === sc.id ? ' on' : ''), title: sc.name, onclick: () => pick('dashboard', null, sc.id) },
       h('img', { src: `/api/lcd/screens/${sc.id}/preview?t=${Date.now()}`, alt: sc.name }),
       h('span', { class: 'tag' }, sc.name)));
-    $('#lcd-gallery').replaceChildren(...builtIn, ...media.map(m => h('div', { class: 'tile' + (this.cfg.mode === 'media' && this.cfg.media === m.id ? ' on' : ''), onclick: () => pick('media', m.id) },
+    $('#lcd-gallery').replaceChildren(...builtIn, deviceTile, ...media.map(m => h('div', { class: 'tile' + (this.cfg.mode === 'media' && this.cfg.media === m.id ? ' on' : ''), onclick: () => pick('media', m.id) },
       h('img', { src: `/api/lcd/media/${encodeURIComponent(m.id)}`, alt: '', loading: 'lazy' }),
       m.animated ? h('span', { class: 'tag' }, 'Animated') : null,
       h('button', { class: 'del', title: 'Delete', onclick: async e => { e.stopPropagation(); await act(api.send('DELETE', `/api/lcd/media/${encodeURIComponent(m.id)}`), 'Deleted.'); this.gallery(); } }, '×'))));

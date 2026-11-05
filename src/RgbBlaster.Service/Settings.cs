@@ -36,7 +36,7 @@ public sealed class KeyboardSettings
 
 public sealed class LcdSettings
 {
-    /// <summary>"dashboard" or "media".</summary>
+    /// <summary>"dashboard" (built-in screen), "media" (uploaded file) or "device" (the AIO's own content; nothing is sent).</summary>
     public string Mode { get; set; } = "dashboard";
     /// <summary>Media file id when Mode is "media".</summary>
     public string? Media { get; set; }

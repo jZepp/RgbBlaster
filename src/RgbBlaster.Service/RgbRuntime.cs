@@ -401,6 +401,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
             if (frames is null) Note($"LCD: media '{id}' not found; showing the status screen.");
         }
         UpdateLcdAreaUnlocked(lcd);
+        _lcd.HandBack(lcd.Mode == "device");
         _lcd.ShowScreen(lcd.Screen);
         _lcd.Show(frames);
     }

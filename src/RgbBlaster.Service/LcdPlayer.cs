@@ -22,6 +22,7 @@ public sealed class LcdPlayer : IDisposable
     private volatile bool _running = true;
     private volatile IReadOnlyList<LcdFrame>? _frames;
     private volatile string _screen = "status";
+    private volatile bool _handBack;
     private volatile byte _brightness = DefaultBrightness, _rotation = DefaultRotation;
     private LinkLcdDevice? _device;
 
@@ -57,13 +58,16 @@ public sealed class LcdPlayer : IDisposable
     public void SetBrightness(byte percent) { _brightness = Math.Min(percent, (byte)100); _wake.Set(); }
     public void SetRotation(byte quarterTurns) { _rotation = (byte)(quarterTurns & 3); _wake.Set(); }
 
+    /// <summary>True returns the screen to the AIO's own content and stops sending frames; false takes it back.</summary>
+    public void HandBack(bool on) { _handBack = on; _wake.Set(); }
+
     private void Run()
     {
         using var dash = new LcdDashboard();
         int index = 0;
         IReadOnlyList<LcdFrame>? playing = null;
         byte sentBrightness = DefaultBrightness, sentRotation = DefaultRotation;
-        bool openFailedNoted = false;
+        bool openFailedNoted = false, released = false;
         while (_running)
         {
             if (_device is null && _open is not null)
@@ -77,9 +81,23 @@ public sealed class LcdPlayer : IDisposable
                     continue;
                 }
                 openFailedNoted = false;
+                released = false;
                 sentBrightness = DefaultBrightness;
                 sentRotation = DefaultRotation;
             }
+
+            if (_handBack)
+            {
+                if (!released && _device is { } d)
+                {
+                    try { d.Release(); released = true; LastError = null; }
+                    catch (Exception ex) { Fault("hand back", ex); d.Dispose(); _device = null; }
+                }
+                LastFrame = null;
+                _wake.WaitOne(1000);
+                continue;
+            }
+            released = false;
 
             var frames = _frames;
             if (!ReferenceEquals(frames, playing)) { playing = frames; index = 0; }
