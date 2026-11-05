@@ -9,7 +9,7 @@ namespace RgbBlaster.Drivers.Link;
 /// iCUE LINK System Hub: lighting for every LED-capable subdevice, plus fan/pump duty, RPM and temperatures.
 /// One I/O lock serialises the light worker and the fan poller; every command is a write followed by its response.
 /// The hub stays in software mode only while this object is open. <see cref="Release"/> returns it to hardware mode,
-/// where the hub runs its stored lighting and fan behaviour.
+/// where the hub runs its stored lighting and fan behavior.
 /// </summary>
 public sealed class LinkHubDevice : IRgbDevice, IFanDevice
 {

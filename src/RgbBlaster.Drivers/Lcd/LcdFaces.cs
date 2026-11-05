@@ -151,7 +151,7 @@ public sealed partial class LcdDashboard
         }
     }
 
-    /// <summary>Tapered needle with a flat tip, a glow in its own colour and a dark edge; optional letter tag.</summary>
+    /// <summary>Tapered needle with a flat tip, a glow in its own color and a dark edge; optional letter tag.</summary>
     private void Needle(Graphics g, float cx, float cy, float angleDeg, float length, float halfWidth, Color color, string? tag = null, float tagAt = 0)
     {
         float a = angleDeg * MathF.PI / 180;
@@ -195,7 +195,7 @@ public sealed partial class LcdDashboard
         g.DrawEllipse(ring, cx - r, cy - r, r * 2, r * 2);
     }
 
-    /// <summary>Big centre hub, then the glass reflection over the whole dial.</summary>
+    /// <summary>Big center hub, then the glass reflection over the whole dial.</summary>
     private static void Hub(Graphics g)
     {
         HubCap(g, Cx, Cy, 22);
@@ -247,7 +247,7 @@ public sealed partial class LcdDashboard
 
     /// <summary>
     /// One dial, three needles. Slots 0 and 1 read the outer scale (slot 0's range); slot 2 reads the inner scale.
-    /// Each needle carries a letter, so the needles can be told apart without colour.
+    /// Each needle carries a letter, so the needles can be told apart without color.
     /// </summary>
     private void Triple(Graphics g, LcdValues v, LcdMetric[] s)
     {
@@ -394,7 +394,7 @@ public sealed partial class LcdDashboard
         g.DrawString(s[0].Short, _unit, Brushes.Gray, new RectangleF(0, Cy - 66, P.Width, 26), _center);
         g.DrawString(s[0].Text(s[0].Read(v)), _readout, Brushes.White, new RectangleF(0, Cy - 44, P.Width, 72), _centerOneLine);
         g.DrawString($"{s[1].Short} {s[1].Text(s[1].Read(v))}", _clockSmall, Brushes.LightGray, new RectangleF(0, Cy + 30, P.Width, 36), _center);
-        // Legend: line styles, since the colours may not be told apart.
+        // Legend: line styles, since the colors may not be told apart.
         using (var solid = new Pen(NeedleA, 4)) g.DrawLine(solid, Cx - 70, Cy + 82, Cx - 40, Cy + 82);
         using (var dash = new Pen(NeedleB, 4) { DashStyle = DashStyle.Dash }) g.DrawLine(dash, Cx + 10, Cy + 82, Cx + 40, Cy + 82);
         g.DrawString(s[0].Short, _tagSmall, Brushes.Gray, new RectangleF(Cx - 36, Cy + 73, 46, 18), _center);

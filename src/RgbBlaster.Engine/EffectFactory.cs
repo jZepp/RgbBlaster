@@ -10,12 +10,19 @@ public static class EffectFactory
 
     public static IEffect Create(EffectSpec s)
     {
-        var palette = new Palette(s.PaletteOrDefault().Take(MaxColors).Select(TryParse).OfType<Rgb>());
+        string variation = (s.Variation ?? "off").ToLowerInvariant();
+        float amount = Math.Clamp(s.VariationAmount, 0f, 180f);
+        var palette = new Palette(s.PaletteOrDefault().Take(MaxColors).Select(TryParse).OfType<Rgb>())
+        {
+            RandomBands = variation == "random" && amount > 0,
+            Variation = amount,
+            Seed = Environment.TickCount,
+        };
         float speed = Math.Clamp(s.Speed, 0.01f, 10f);
         float scale = Math.Clamp(s.Scale, 0.1f, 20f);
         IEffect e = s.Type.ToLowerInvariant() switch
         {
-            "solid" => new SolidEffect(palette[0]),
+            "solid" => new SolidEffect(palette),
             "breathe" => new BreathingEffect(palette, 1f / speed),
             "wave" => new WaveEffect(palette, speed, s.Angle, scale, s.Spacing),
             "radial" => new RadialEffect(palette, speed, scale, s.CenterX, s.CenterY, s.Spacing),
@@ -26,6 +33,8 @@ public static class EffectFactory
             "fire" => new FireEffect(palette, speed, s.Height),
             _ => new RainbowWaveEffect(speed, scale),
         };
+        if (variation == "drift" && amount > 0 && e is not RainbowWaveEffect)
+            e = new ColorDriftEffect(e, palette, amount, Math.Clamp(s.VariationSeconds, 1f, 600f));
         float b = Math.Clamp(s.Brightness, 0f, 1f);
         return b >= 0.999f ? e : new BrightnessEffect(e, b);
     }

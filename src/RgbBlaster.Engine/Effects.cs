@@ -2,10 +2,13 @@ using RgbBlaster.Core;
 
 namespace RgbBlaster.Engine;
 
-public sealed class SolidEffect(Rgb color) : IEffect
+/// <summary>One color everywhere. Follows the palette's drift.</summary>
+public sealed class SolidEffect(Palette colors) : IEffect
 {
+    public SolidEffect(Rgb color) : this(Palette.Of(color)) { }
+
     public string Name => "solid";
-    public void Render(Canvas canvas, double t) => canvas.Fill(color);
+    public void Render(Canvas canvas, double t) => canvas.Fill(colors.Span(0));
 }
 
 /// <summary>Horizontal hue wave. Computes one hue per column and copies it down each row.</summary>
@@ -92,7 +95,7 @@ public sealed class GradientEffect(Palette colors, float angleDegrees) : IEffect
     }
 }
 
-/// <summary>Rings of the palette colors that grow out of a centre point.</summary>
+/// <summary>Rings of the palette colors that grow out of a center point.</summary>
 public sealed class RadialEffect(Palette colors, float speedHz, float rings, float cx, float cy, float spacing = 0) : IEffect
 {
     public string Name => "radial";
@@ -155,7 +158,7 @@ public sealed class MatrixEffect : IEffect
         Head = head,
         Speed = _speed * (0.6f + 0.8f * _rng.NextSingle()),
         Tail = rows * (0.3f + 0.5f * _rng.NextSingle()),
-        Color = _rng.Next(_colors.Count),
+        Color = _rng.Next(), // band slot: palette color slot mod Count, its own hue with random variation
     };
 
     public string Name => "matrix";

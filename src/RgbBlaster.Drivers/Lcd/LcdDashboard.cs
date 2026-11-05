@@ -285,8 +285,8 @@ public sealed partial class LcdDashboard : IDisposable
         float width = Math.Clamp(s.BarWidth, 0.05f, 1f) * span, feather = width * 0.35f;
         float period = Math.Max(0.3f, s.PeriodSeconds);
         float k = (float)(_clockSw.Elapsed.TotalSeconds % period / period);
-        float centre = -width + k * (span + 2 * width);
-        float a = centre - width / 2 - feather, b = centre - width / 2, c = centre + width / 2, d = centre + width / 2 + feather;
+        float center = -width + k * (span + 2 * width);
+        float a = center - width / 2 - feather, b = center - width / 2, c = center + width / 2, d = center + width / 2 + feather;
         // Black before a and after d; fades over a..b and c..d; the band b..c stays clear.
         // Antialiasing would leave a lit fringe along the frame edges, so the mask is drawn without it.
         var smoothing = g.SmoothingMode;
@@ -327,7 +327,7 @@ public sealed partial class LcdDashboard : IDisposable
 
     private float Temp01(float t) => float.IsNaN(t) ? 0 : Math.Clamp((t - GaugeMin) / (GaugeMax - GaugeMin), 0, 1);
 
-    /// <summary>Encodes any image file as a 480x480 frame, scaled to fill and centre-cropped.</summary>
+    /// <summary>Encodes any image file as a 480x480 frame, scaled to fill and center-cropped.</summary>
     public byte[] FromFile(string path)
     {
         using var src = Image.FromFile(path);

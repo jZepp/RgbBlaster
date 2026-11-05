@@ -286,6 +286,7 @@ const lighting = {
         oninput: e => { this.spec.colors[0] = e.target.value; set('color', e.target.value); } })));
     }
     if (want.has('palette')) kids.push(this.paletteEditor(set));
+    if (want.has('color') || want.has('palette')) kids.push(...this.variationControls(set, slider));
     if (want.has('speed')) kids.push(slider('speed', 'Speed', 0.02, 2, 0.02, v => `${(1 / v).toFixed(1)} s per cycle`));
     if (want.has('spacing')) kids.push(slider('spacing', 'Spacing (dark between bands)', 0, 0.95, 0.05, v => v > 0 ? `${Math.round(v * 100)}% dark` : 'none'));
     if (want.has('height')) kids.push(slider('height', 'Flame height', 0.1, 1, 0.05, v => `${Math.round(v * 100)}% of the case`));
@@ -293,11 +294,25 @@ const lighting = {
     if (want.has('angle')) kids.push(slider('angle', 'Direction', 0, 359, 1, v => `${Math.round(v)}° ${arrow(v)}`));
     if (want.has('scale')) kids.push(slider('scale', 'Repeats across the case', 0.25, 6, 0.25, v => `× ${(+v).toFixed(2)}`));
     if (want.has('center')) {
-      kids.push(slider('centerX', 'Centre, front to rear', 0, 1, 0.01, v => `${Math.round(v * 100)}%`));
-      kids.push(slider('centerY', 'Centre, top to bottom', 0, 1, 0.01, v => `${Math.round(v * 100)}%`));
+      kids.push(slider('centerX', 'Center, front to rear', 0, 1, 0.01, v => `${Math.round(v * 100)}%`));
+      kids.push(slider('centerY', 'Center, top to bottom', 0, 1, 0.01, v => `${Math.round(v * 100)}%`));
     }
     kids.push(slider('brightness', 'Brightness', 0, 1, 0.05, v => `${Math.round(v * 100)}%`));
     p.replaceChildren(...kids);
+  },
+  // Hue variation of the chosen colors. "Random" needs bands, breaths or drops, so a still effect offers drift only.
+  variationControls(set, slider) {
+    const s = this.spec, banded = ['breathe', 'wave', 'radial', 'cycle', 'matrix'].includes(s.type);
+    s.variation ??= 'off'; s.variationAmount ??= 60; s.variationSeconds ??= 20;
+    if (s.variation === 'random' && !banded) s.variation = 'off';
+    const modes = [['off', 'Off'], ...(banded ? [['random', 'Random per band']] : []), ['drift', 'Slow drift']];
+    const kids = [h('div', { class: 'field' }, 'Color variation', h('div', { class: 'seg' },
+      ...modes.map(([v, t]) => h('button', { class: s.variation === v ? 'on' : '', onclick: () => { set('variation', v); this.render(); } }, t))))];
+    if (s.variation !== 'off') {
+      kids.push(slider('variationAmount', 'Variation amount', 5, 180, 5, v => v >= 180 ? 'any color' : `up to ${Math.round(v)}° of hue`));
+      if (s.variation === 'drift') kids.push(slider('variationSeconds', 'Drift speed', 2, 120, 1, v => `${Math.round(v)} s per swing`));
+    }
+    return kids;
   },
   // Colors in order. Click a swatch to change it, arrows to move it, × to remove it; + adds a color.
   paletteEditor(set) {
@@ -456,7 +471,7 @@ const layout = {
     }
     return g;
   },
-  // Rotate or mirror placed zones as one rigid group, about the centre of the group.
+  // Rotate or mirror placed zones as one rigid group, about the center of the group.
   // Use when the real LED orientation of a device is not known: turn or flip until the preview matches the hardware.
   orientControls(members) {
     const go = op => { this.orient(members, op); this.draw(); this.refreshPoints(); this.editor(); };
@@ -471,7 +486,7 @@ const layout = {
   orient(members, op) {
     if (!members.length) return;
     const norm = a => { a = ((a % 360) + 540) % 360 - 180; return a === -180 ? 180 : a; };
-    // Centre of the group, from ring centres (every fan) and line or grid end points.
+    // Center of the group, from ring centers (every fan) and line or grid end points.
     const pts = members.flatMap(q => q.shape === 'Ring'
       ? Array.from({ length: Math.max(1, q.fans || 1) }, (_, i) => [q.x + i * (q.fanDx || 0), q.y + i * (q.fanDy || 0)])
       : [[q.x, q.y], [q.x2, q.y2]]);
@@ -492,7 +507,7 @@ const layout = {
         else if (op.flip === 'v') { q.fanDy = -(q.fanDy || 0); q.rotation = norm(180 - (q.rotation ?? 0)); q.reverse = !q.reverse; }
         else { [q.fanDx, q.fanDy] = vec(q.fanDx || 0, q.fanDy || 0); q.rotation = norm((q.rotation ?? 0) + op.rotate); }
       } else if (q.shape === 'Grid' && op.rotate) {
-        // A grid keeps its box and turns about its own centre, which moves with the group.
+        // A grid keeps its box and turns about its own center, which moves with the group.
         const hx = (q.x2 - q.x) / 2, hy = (q.y2 - q.y) / 2;
         const [mx, my] = pt(q.x + hx, q.y + hy);
         q.x = mx - hx; q.y = my - hy; q.x2 = mx + hx; q.y2 = my + hy;
@@ -631,7 +646,7 @@ const layout = {
     const rev = label => h('label', { class: 'field-row' }, label, h('input', { type: 'checkbox', checked: !!p.reverse,
       onchange: e => { p.reverse = e.target.checked; this.refreshPoints(); } }));
     const fields = p.shape === 'Ring'
-      ? [num('x', 'Centre X'), num('y', 'Centre Y'), num('radius', 'Radius'), num('fans', 'Fans in a row', 1), num('fanDx', 'Fan spacing X'), num('fanDy', 'Fan spacing Y'),
+      ? [num('x', 'Center X'), num('y', 'Center Y'), num('radius', 'Radius'), num('fans', 'Fans in a row', 1), num('fanDx', 'Fan spacing X'), num('fanDy', 'Fan spacing Y'),
          rot('LED 1 position (0° = top)'), rev('Counter-clockwise')]
       : p.shape === 'Grid'
         ? [num('x', 'Start X'), num('y', 'Start Y'), num('x2', 'End X'), num('y2', 'End Y'), rot('Rotation')]

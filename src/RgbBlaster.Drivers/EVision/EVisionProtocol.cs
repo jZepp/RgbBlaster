@@ -184,7 +184,7 @@ public static class EVisionProtocol
         return r;
     }
 
-    /// <summary>Position of each LED index in the key matrix, 0..1 on each axis. Unmapped LEDs get the centre.</summary>
+    /// <summary>Position of each LED index in the key matrix, 0..1 on each axis. Unmapped LEDs get the center.</summary>
     public static (float X, float Y)[] Positions()
     {
         var pos = Enumerable.Repeat((0.5f, 0.5f), LedCount).ToArray();

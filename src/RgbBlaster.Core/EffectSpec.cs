@@ -28,6 +28,12 @@ public sealed class EffectSpec
     public float Spacing { get; set; }
     /// <summary>Fire: flame height as a share of the canvas, 0.05..1.</summary>
     public float Height { get; set; } = 0.6f;
+    /// <summary>"off"; "random" (each band, breath or drop gets its own hue); "drift" (all colors swing in hue over time).</summary>
+    public string Variation { get; set; } = "off";
+    /// <summary>Largest hue change, 0..180 degrees. 180 allows any hue.</summary>
+    public float VariationAmount { get; set; } = 60;
+    /// <summary>Drift: seconds for one full swing.</summary>
+    public float VariationSeconds { get; set; } = 20;
 
     /// <summary>The palette, falling back to Color and Color2.</summary>
     public IReadOnlyList<string> PaletteOrDefault() => Colors.Count > 0 ? Colors : [Color, Color2];

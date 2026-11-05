@@ -134,7 +134,7 @@ public sealed class ZonePlacement
     public float Y { get; set; }
     public float Radius { get; set; } = 0.05f;
     public int Fans { get; set; } = 1;
-    /// <summary>Distance between fan centres for Fans &gt; 1.</summary>
+    /// <summary>Distance between fan centers for Fans &gt; 1.</summary>
     public float FanDx { get; set; }
     public float FanDy { get; set; }
 
@@ -142,7 +142,7 @@ public sealed class ZonePlacement
     public float X2 { get; set; }
     public float Y2 { get; set; }
 
-    /// <summary>Degrees, clockwise. Ring: where LED 1 sits, 0 = 12 o'clock. Grid: turns the grid about its centre.</summary>
+    /// <summary>Degrees, clockwise. Ring: where LED 1 sits, 0 = 12 o'clock. Grid: turns the grid about its center.</summary>
     public float Rotation { get; set; }
     /// <summary>Ring: LEDs run counter-clockwise. Line: LED 1 is at the X2,Y2 end.</summary>
     public bool Reverse { get; set; }

@@ -32,7 +32,7 @@ public static class LcdMedia
         return frames;
     }
 
-    /// <summary>Scales to fill 480x480, centre-cropped, and encodes as JPEG.</summary>
+    /// <summary>Scales to fill 480x480, center-cropped, and encodes as JPEG.</summary>
     public static byte[] Encode(Image src, long quality = 85)
     {
         using var bmp = new Bitmap(P.Width, P.Height, PixelFormat.Format24bppRgb);

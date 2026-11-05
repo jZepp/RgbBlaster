@@ -83,8 +83,8 @@ internal static class Program
     }
 
     /// <summary>
-    /// Three-colour ring. When the service is not running the ring is grey with a diagonal bar,
-    /// so the two states differ by shape as well as colour.
+    /// Three-color ring. When the service is not running the ring is gray with a diagonal bar,
+    /// so the two states differ by shape as well as color.
     /// </summary>
     private static Icon MakeIcon(bool running)
     {
