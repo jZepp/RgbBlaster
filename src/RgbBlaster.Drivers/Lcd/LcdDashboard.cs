@@ -220,7 +220,7 @@ public sealed class LcdDashboard : IDisposable
 
         // Shortest needle at the bottom of the stack.
         if (!float.IsNaN(_pumpShown)) Needle(g, PumpAngle(_pumpShown), 104, 6, Color.FromArgb(60, 170, 255), "P", 60);
-        if (!float.IsNaN(_gpuShown)) Needle(g, DialAngle(_gpuShown), 160, 6, Color.FromArgb(235, 235, 240), "G", 100);
+        if (!float.IsNaN(_gpuShown)) Needle(g, DialAngle(_gpuShown), 192, 6, Color.FromArgb(235, 235, 240), "G", 100);
         if (!float.IsNaN(_cpuShown)) Needle(g, DialAngle(_cpuShown), 192, 7, Color.FromArgb(255, 70, 40), "C", 136);
         Hub(g);
     }
