@@ -248,13 +248,20 @@ public sealed class LcdDashboard : IDisposable
     {
         float a = angleDeg * MathF.PI / 180;
         float ux = MathF.Cos(a), uy = MathF.Sin(a), px = -uy, py = ux;
+        halfWidth *= 1.6f;
         PointF[] needle =
         [
             new(Cx + ux * length, Cy + uy * length),
             new(Cx + px * halfWidth - ux * 24, Cy + py * halfWidth - uy * 24),
             new(Cx - px * halfWidth - ux * 24, Cy - py * halfWidth - uy * 24),
         ];
+        // Glow: round-edged strokes in the needle's own colour, widest and faintest first.
+        foreach (var (width, alpha) in new[] { (22f, 22), (15f, 38), (9f, 60), (5f, 90) })
+            using (var glow = new Pen(Color.FromArgb(alpha, color), width) { LineJoin = LineJoin.Round })
+                g.DrawPolygon(glow, needle);
         using (var nb = new SolidBrush(color)) g.FillPolygon(nb, needle);
+        // Thin dark edge keeps the needle readable over a bright background.
+        using (var edge = new Pen(Color.FromArgb(160, 0, 0, 0), 1.5f) { LineJoin = LineJoin.Round }) g.DrawPolygon(edge, needle);
         if (tag is null) return;
         float tx = Cx + ux * tagAt, ty = Cy + uy * tagAt;
         using (var disc = new SolidBrush(Color.FromArgb(20, 20, 24))) g.FillEllipse(disc, tx - 14, ty - 14, 28, 28);
