@@ -97,7 +97,8 @@ public static class EVisionProtocol
     }
 
     /// <summary>Mode parameter block: mode, brightness, speed, direction, random flag, R, G, B.</summary>
-    public static void ModeEx(Span<byte> buf, byte mode, byte brightness, byte speed, Core.Rgb color, bool randomColor = false)
+    /// <param name="direction">Parameter 3. Value meanings are not documented; 0 is the firmware default.</param>
+    public static void ModeEx(Span<byte> buf, byte mode, byte brightness, byte speed, Core.Rgb color, bool randomColor = false, byte direction = 0)
     {
         buf[..ReportLength].Clear();
         buf[0] = ReportId;
@@ -107,6 +108,7 @@ public static class EVisionProtocol
         buf[8] = mode;
         buf[9] = brightness;
         buf[10] = speed;
+        buf[11] = direction;
         buf[12] = (byte)(randomColor ? 1 : 0);
         buf[13] = color.R;
         buf[14] = color.G;

@@ -310,7 +310,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
     {
         Rgb color;
         try { color = Rgb.Parse(kb.Color); } catch (FormatException) { color = Rgb.White; }
-        foreach (var k in _devices.OfType<EVisionKeyboardDevice>()) k.SetFirmwareMode(kb.Mode, color, kb.Speed, kb.Random);
+        foreach (var k in _devices.OfType<EVisionKeyboardDevice>()) k.SetFirmwareMode(kb.Mode, color, kb.Speed, kb.Random, (byte)(kb.Direction & 3));
     }
 
     public IReadOnlyList<string> SetFanCurves(List<FanCurveConfig> curves)

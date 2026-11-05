@@ -135,11 +135,11 @@ public class EVisionTests
         var hw = new FakeEVision();
         var dev = Opened(hw);
         dev.SetNativeEffect(new NativeEffect(NativeEffectKind.Rainbow, PeriodSeconds: 5));
-        dev.SetFirmwareMode(0x0D, new Rgb(0, 0, 255), 2, false);
+        dev.SetFirmwareMode(0x0D, new Rgb(0, 0, 255), 2, false, direction: 3);
         dev.Flush();
         dev.Flush();
         var mode = hw.Writes.Single(w => w[3] == P.CmdSetParameter && w[5] == 0);
-        Assert.Equal([0x0D, P.BrightnessMax, 2, 0, 0, 0, 0, 255], mode[8..16]);
+        Assert.Equal([0x0D, P.BrightnessMax, 2, 3, 0, 0, 0, 255], mode[8..16]);   // byte 11 = direction
 
         hw.Writes.Clear();
         dev.SetFirmwareMode(null, default, 0, false);

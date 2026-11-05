@@ -50,9 +50,10 @@ public enum NativeEffectKind { None, Rainbow, Breathe, Cycle, Wave, Sparkle, Fir
 /// <summary>An effect described as parameters, for devices that can run it in firmware instead of taking frames.</summary>
 /// <param name="Mode">Firmware only: the device's mode number.</param>
 /// <param name="Speed">Firmware only: the device's speed step.</param>
+/// <param name="Direction">Firmware only: the device's direction value.</param>
 /// <param name="Random">The device picks the colors (the effect uses several).</param>
 public readonly record struct NativeEffect(NativeEffectKind Kind, Rgb Color = default, float PeriodSeconds = 0,
-    byte Mode = 0, byte Speed = 0, bool Random = false)
+    byte Mode = 0, byte Speed = 0, bool Random = false, byte Direction = 0)
 {
     public static NativeEffect None => default;
 }

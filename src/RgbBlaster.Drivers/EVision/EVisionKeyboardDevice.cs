@@ -97,11 +97,11 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
     }
 
     /// <summary>Runs a built-in mode regardless of the effect. Null follows the effect again.</summary>
-    public void SetFirmwareMode(byte? mode, Rgb color, byte speed, bool random)
+    public void SetFirmwareMode(byte? mode, Rgb color, byte speed, bool random, byte direction = 0)
     {
         lock (_stage)
             _override = mode is byte m
-                ? new NativeEffect(NativeEffectKind.Firmware, color, Mode: m, Speed: Math.Min(speed, P.SpeedSlowest), Random: random)
+                ? new NativeEffect(NativeEffectKind.Firmware, color, Mode: m, Speed: Math.Min(speed, P.SpeedSlowest), Random: random, Direction: direction)
                 : null;
     }
 
@@ -172,7 +172,7 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
                 WriteMode(P.ModeSpectrumCycle, Speed(e.PeriodSeconds), Rgb.White, false);
                 break;
             case NativeEffectKind.Firmware:
-                WriteMode(e.Mode, e.Speed, e.Color, e.Random);
+                WriteMode(e.Mode, e.Speed, e.Color, e.Random, e.Direction);
                 break;
             case NativeEffectKind.Wave:
                 WriteMode(P.ModeColorWave, Speed(e.PeriodSeconds), e.Color, e.Random);
@@ -265,11 +265,11 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
     }
 
     /// <summary>Caller holds _ioLock.</summary>
-    private void WriteMode(byte mode, byte speed, Rgb color, bool random)
+    private void WriteMode(byte mode, byte speed, Rgb color, bool random, byte direction = 0)
     {
         P.Control(_out, P.CmdBegin);
         Exchange();
-        P.ModeEx(_out, mode, P.BrightnessMax, speed, color, random);
+        P.ModeEx(_out, mode, P.BrightnessMax, speed, color, random, direction);
         Exchange();
         P.Control(_out, P.CmdEnd);
         Exchange();

@@ -29,6 +29,8 @@ public sealed class KeyboardSettings
     /// <summary>0 fastest to 5 slowest.</summary>
     public byte Speed { get; set; } = 3;
     public bool Random { get; set; }
+    /// <summary>Firmware direction value, 0-3.</summary>
+    public byte Direction { get; set; }
     public KeyboardSettings Clone() => (KeyboardSettings)MemberwiseClone();
 }
 
