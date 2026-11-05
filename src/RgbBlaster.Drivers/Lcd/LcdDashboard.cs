@@ -52,7 +52,7 @@ public sealed class LcdDashboard : IDisposable
 
     private readonly Bitmap _bmp = new(P.Width, P.Height, PixelFormat.Format24bppRgb);
     private readonly ImageCodecInfo _jpeg = ImageCodecInfo.GetImageEncoders().First(e => e.FormatID == ImageFormat.Jpeg.Guid);
-    private readonly EncoderParameters _quality = new(1) { Param = { [0] = new EncoderParameter(Encoder.Quality, 85L) } };
+    private readonly EncoderParameters _quality = new(1) { Param = { [0] = new EncoderParameter(Encoder.Quality, 75L) } };
     private readonly Font _big = new("Segoe UI", 110, FontStyle.Bold, GraphicsUnit.Pixel);
     private readonly Font _label = new("Segoe UI", 30, FontStyle.Regular, GraphicsUnit.Pixel);
     private readonly Font _small = new("Segoe UI", 38, FontStyle.Bold, GraphicsUnit.Pixel);

@@ -61,6 +61,10 @@ public sealed class LcdPlayer : IDisposable
     public void SetBrightness(byte percent) { _brightness = Math.Min(percent, (byte)100); _wake.Set(); }
     public void SetRotation(byte quarterTurns) { _rotation = (byte)(quarterTurns & 3); _wake.Set(); }
 
+    private volatile int _minFrameMs = 500;
+    /// <summary>Limits frames sent to the device. Media skips frames to keep its speed; screens render less often.</summary>
+    public void SetMaxFps(float fps) { _minFrameMs = (int)(1000 / Math.Clamp(float.IsFinite(fps) ? fps : 2, 0.5f, 10f)); _wake.Set(); }
+
     /// <summary>True returns the screen to the AIO's own content and stops sending frames; false takes it back.</summary>
     public void HandBack(bool on) { _handBack = on; _wake.Set(); }
 
@@ -113,7 +117,7 @@ public sealed class LcdPlayer : IDisposable
                 var style = _style;
                 var bg = LcdDashboard.NeedsBackground(screen, style) ? _background() : null;
                 jpeg = dash.Render(screen, new LcdValues(cpu, gpu, pump), bg, style);
-                delay = LcdDashboard.FrameMs(screen, style);
+                delay = Math.Max(LcdDashboard.FrameMs(screen, style), _minFrameMs);
             }
             else
             {
@@ -121,6 +125,8 @@ public sealed class LcdPlayer : IDisposable
                 index++;
                 jpeg = f.Jpeg;
                 delay = playing.Count == 1 ? 1000 : f.DelayMs;
+                // Skip frames that would come too soon, so the animation keeps its speed at the lower rate.
+                while (playing.Count > 1 && delay < _minFrameMs) { delay += Math.Max(1, playing[index % playing.Count].DelayMs); index++; }
             }
             LastFrame = jpeg;
 

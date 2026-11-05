@@ -398,6 +398,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
         if (_lcd is null) return;
         _lcd.SetBrightness(Math.Min(lcd.Brightness, (byte)100));
         _lcd.SetRotation((byte)(lcd.Rotation & 3));
+        _lcd.SetMaxFps(lcd.MaxFps);
         IReadOnlyList<LcdFrame>? frames = null;
         if (lcd.Mode == "media" && lcd.Media is { } id)
         {

@@ -784,6 +784,11 @@ const lcd = {
     b.value = this.cfg.brightness;
     $('#lcd-bright-val').textContent = `${this.cfg.brightness}%`;
     b.oninput = () => { this.cfg.brightness = +b.value; $('#lcd-bright-val').textContent = `${b.value}%`; this.push(); };
+    const f = $('#lcd-fps'), fpsText = v => `${(+v).toFixed(1)} per second`;
+    this.cfg.maxFps ??= 2;
+    f.value = this.cfg.maxFps;
+    $('#lcd-fps-val').textContent = fpsText(this.cfg.maxFps);
+    f.oninput = () => { this.cfg.maxFps = +f.value; $('#lcd-fps-val').textContent = fpsText(f.value); this.push(); };
     this.backgroundControls();
     for (const btn of $$('#lcd-rot button')) {
       btn.classList.toggle('on', +btn.dataset.r === this.cfg.rotation);

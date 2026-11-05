@@ -54,6 +54,11 @@ public sealed class LcdSettings
     public float BarWidth { get; set; } = 0.3f;
     /// <summary>Darkening of the background under dials and text, 0..0.9.</summary>
     public float BackgroundDim { get; set; } = 0.35f;
+    /// <summary>
+    /// Most frames per second sent to the LCD, 0.5..10. Tested on a TITAN 360: 10 fps with animated lighting made
+    /// the pump head drop off USB within minutes; 1 fps ran without drops.
+    /// </summary>
+    public float MaxFps { get; set; } = 2;
 
     public LcdSettings Clone() => (LcdSettings)MemberwiseClone();
     public byte Brightness { get; set; } = 100;
