@@ -244,8 +244,8 @@ const lighting = {
       kids.push(
         h('label', { class: 'field-row' }, 'Random colors', h('input', { type: 'checkbox', checked: kb.random, onchange: e => set('random', e.target.checked, true) })),
         kb.random ? null : h('label', { class: 'field-row' }, 'Color', h('input', { type: 'color', value: kb.color, oninput: e => set('color', e.target.value) })),
-        h('div', { class: 'field' }, 'Direction', h('div', { class: 'seg' }, ...[0, 1, 2, 3].map(d =>
-          h('button', { class: (kb.direction ?? 0) === d ? 'on' : '', onclick: () => set('direction', d, true) }, String(d))))),
+        h('div', { class: 'field' }, 'Direction', h('div', { class: 'seg' }, ...[[0, 'Left to right'], [1, 'Right to left']].map(([d, label]) =>
+          h('button', { class: ((kb.direction ?? 0) === 0 ? 0 : 1) === d ? 'on' : '', onclick: () => set('direction', d, true) }, label)))),
         h('label', { class: 'field' }, 'Speed', val, h('input', { type: 'range', min: 0, max: 5, step: 1, value: kb.speed, oninput: e => { val.textContent = `${e.target.value} (0 fastest, 5 slowest)`; set('speed', +e.target.value); } })));
     }
     $('#kb-params').replaceChildren(...kids.filter(Boolean));

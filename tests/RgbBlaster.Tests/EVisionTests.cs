@@ -161,6 +161,23 @@ public class EVisionTests
         Assert.Equal([P.SideBarModeStatic, 0, 5], side[8..11]);
     }
 
+    [Theory]
+    [InlineData(0f, 0x02, 0)]
+    [InlineData(180f, 0x02, 1)]
+    [InlineData(200f, 0x02, 1)]
+    [InlineData(91f, 0x0C, 0)]
+    [InlineData(270f, 0x0C, 0)]
+    public void NativeWavePicksFirmwareModeAndDirectionFromAngle(float angle, byte mode, byte direction)
+    {
+        var hw = new FakeEVision();
+        var dev = Opened(hw);
+        dev.SetNativeEffect(new NativeEffect(NativeEffectKind.Wave, new Rgb(0, 255, 0), 4, AngleDegrees: angle));
+        dev.Flush();
+        var m = hw.Writes.Single(w => w[3] == P.CmdSetParameter && w[5] == 0);
+        Assert.Equal(mode, m[8]);
+        Assert.Equal(direction, m[11]);
+    }
+
     [Fact]
     public void SideBarIndexPicksNearestPaletteEntry()
     {

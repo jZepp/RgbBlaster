@@ -53,7 +53,7 @@ public sealed class WaveEffect(Palette colors, float speedHz, float angleDegrees
     public WaveEffect(Rgb a, Rgb b, float speedHz, float angleDegrees, float wavelengths) : this(Palette.Of(a, b), speedHz, angleDegrees, wavelengths) { }
 
     public string Name => "wave";
-    public NativeEffect Native => new(NativeEffectKind.Wave, colors[0], speedHz > 0 ? 1f / speedHz : 0, Random: colors.Count > 2);
+    public NativeEffect Native => new(NativeEffectKind.Wave, colors[0], speedHz > 0 ? 1f / speedHz : 0, Random: colors.Count > 2, AngleDegrees: angleDegrees);
 
     public void Render(Canvas canvas, double t)
     {

@@ -24,6 +24,9 @@ public static class EVisionProtocol
     public const byte ModeColorWave = 0x02;   // firmware wave; with the random flag it is a rainbow
     public const byte ModeSpectrumCycle = 0x04;
     public const byte ModeStarlightSlow = 0x0F;
+    public const byte ModeRainbowWaveVertical = 0x0C;
+    // Direction values for the color wave, tested on a K580 on 2026-11-04. 2 and 3 also run right to left; no value runs vertically.
+    public const byte DirectionLeftToRight = 0, DirectionRightToLeft = 1;
     public const byte ModeBreathing = 0x05;
     public const byte ModeStatic = 0x06;
     public const byte ModeCustom = 0x14;      // per-key colors; the keyboard stores them on every write (visible flash)

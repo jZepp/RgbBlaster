@@ -175,7 +175,7 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
                 WriteMode(e.Mode, e.Speed, e.Color, e.Random, e.Direction);
                 break;
             case NativeEffectKind.Wave:
-                WriteMode(P.ModeColorWave, Speed(e.PeriodSeconds), e.Color, e.Random);
+                WriteWave(e);
                 break;
             case NativeEffectKind.Breathe:
                 WriteMode(P.ModeBreathing, Speed(e.PeriodSeconds), e.Color, e.Random);
@@ -190,6 +190,20 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
                 break;
         }
         _nativeApplied = e;
+    }
+
+    /// <summary>
+    /// The firmware color wave only runs horizontally. A mostly vertical wave uses the vertical rainbow mode instead,
+    /// which keeps the motion but not the colors.
+    /// </summary>
+    private void WriteWave(NativeEffect e)
+    {
+        float rad = e.AngleDegrees * MathF.PI / 180f;
+        float dx = MathF.Cos(rad), dy = MathF.Sin(rad);
+        if (MathF.Abs(dy) > MathF.Abs(dx))
+            WriteMode(P.ModeRainbowWaveVertical, Speed(e.PeriodSeconds), Rgb.White, true);
+        else
+            WriteMode(P.ModeColorWave, Speed(e.PeriodSeconds), e.Color, e.Random, dx >= 0 ? P.DirectionLeftToRight : P.DirectionRightToLeft);
     }
 
     /// <summary>Firmware speed 0 (fastest) to 5 (slowest) for an effect period.</summary>
