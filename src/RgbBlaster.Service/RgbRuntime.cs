@@ -69,6 +69,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
     private void Start()
     {
         _settings = store.Load(config);
+        ApplyBeatTuning();
         var profile = ActiveProfileUnlocked();
         _audioIn = new AudioReceiver(config.Audio.Port, Note);
         _audio = simulate ? new SimulatedAudio(_audioIn) : _audioIn;
@@ -415,6 +416,25 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
         }
     }
 
+    public void SetBeatTuning(float sensitivity, int offsetMs)
+    {
+        lock (_gate)
+        {
+            _settings.BeatSensitivity = Math.Clamp(sensitivity, 0f, 1f);
+            _settings.BeatOffsetMs = Math.Clamp(offsetMs, -250, 250);
+            ApplyBeatTuning();
+            store.Save(_settings);
+        }
+    }
+
+    public object BeatTuningInfo() => new { sensitivity = BeatTuning.Shared.Sensitivity, offsetMs = BeatTuning.Shared.OffsetMs };
+
+    private void ApplyBeatTuning()
+    {
+        BeatTuning.Shared.Sensitivity = _settings.BeatSensitivity ?? 0.5f;
+        BeatTuning.Shared.OffsetMs = _settings.BeatOffsetMs ?? 0;
+    }
+
     /// <summary>Lighting frames per second in use.</summary>
     public int LightingFps() { lock (_gate) return _settings.LightingFps ?? config.FrameRate; }
 
@@ -424,7 +444,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
         bool wanted;
         lock (_gate) wanted = ActiveProfileUnlocked().Effect.UsesSound;
         var f = _audio.Current;
-        return new { version = AppVersion.Display, wanted, port = config.Audio.Port, receiving = _audioIn?.Receiving ?? false, level = f.Level, bands = f.Bands };
+        return new { version = AppVersion.Display, wanted, port = config.Audio.Port, receiving = _audioIn?.Receiving ?? false, level = f.Level, bands = f.Bands, beats = _audioIn?.Beats ?? 0 };
     }
 
     public void SetLcd(LcdSettings lcd)

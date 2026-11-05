@@ -321,26 +321,76 @@ const lighting = {
       if (s.sound === 'rings') kids.push(h('div', { class: 'hint' }, 'Rings near the center follow the bass; the outer rings follow the treble.'));
       if (s.sound !== 'off') kids.push(slider('soundAmount', 'Sound effect strength', 0.1, 1, 0.05, v => `${Math.round(v * 100)}%`));
     }
-    if (soundEffect || s.sound !== 'off') {
-      const line = h('div', { class: 'hint', id: 'sound-state' }, 'Checking sound…');
-      kids.push(line);
-      this.soundStatus();
-    }
+    if (s.type === 'beat' || ['beat', 'kick'].includes(s.sound)) kids.push(...this.beatControls());
+    const meter = $('#sound-meter');
+    meter.hidden = !(soundEffect || s.sound !== 'off');
+    if (!meter.hidden) this.soundStatus();
     return kids;
   },
-  // Shows whether the tray app sends sound levels. Polled while a sound option is visible on this page.
+  // Beat sensitivity and timing. Service-wide, not part of the effect: they depend on the music and the speakers.
+  pushBeat: debounce(b => act(api.send('PUT', '/api/audio/beat', b)), 200),
+  beatControls() {
+    const b = this.beat ??= { sensitivity: 0.5, offsetMs: 0 };
+    if (!this.beatLoaded) {
+      this.beatLoaded = true;
+      api.get('/api/audio/beat').then(v => { Object.assign(b, v); this.render(); }).catch(() => { this.beatLoaded = false; });
+    }
+    const sens = v => v < 0.2 ? 'strong kicks only' : v > 0.8 ? 'soft beats too' : v === 0.5 ? 'normal' : `${Math.round(v * 100)}%`;
+    const time = v => v === 0 ? 'as heard'
+      : v > 0 ? `${v} ms later` : `${-v} ms earlier (predicted from the tempo)`;
+    const one = (key, label, min, max, step, fmt) => {
+      const val = h('span', { class: 'val' }, fmt(b[key]));
+      return h('label', { class: 'field' }, label, val, h('input', { type: 'range', min, max, step, value: b[key],
+        oninput: e => { b[key] = +e.target.value; val.textContent = fmt(b[key]); this.pushBeat({ ...b }); } }));
+    };
+    return [
+      one('sensitivity', 'Beat sensitivity', 0, 1, 0.05, sens),
+      one('offsetMs', 'Beat timing', -250, 250, 10, time),
+      h('div', { class: 'hint' }, 'Shared by all effects. If the lights trail the music, move timing earlier: once the beat is steady, the next beat is predicted. With Bluetooth speakers the lights can be early instead; move it later.'),
+    ];
+  },
+  // Sound meter in the Preview card: 16 bands (bass left) and a level bar, plus a light that flashes on each beat.
+  // Polled 10 times a second while it is visible.
   async soundStatus() {
     clearTimeout(this.soundTimer);
+    const meter = $('#sound-meter');
+    if (meter.hidden || $('#page-lighting').hidden) return;
     const el = $('#sound-state');
-    if (!el || $('#page-lighting').hidden) return;
+    let a = null;
     try {
-      const a = await api.get('/api/audio');
-      const bars = a.bands.map(b => '▁▂▃▄▅▆▇█'[Math.min(7, Math.floor(b * 8))]).join('');
-      el.textContent = a.receiving ? `Sound: receiving from the tray app ${bars}`
-        : state.status?.simulated ? `Sound: simulated beat (no tray app) ${bars}`
-        : 'Sound: nothing received. Start the RgbBlaster tray app and check "React to sound" in its menu.';
-    } catch { el.textContent = 'Sound: service not reachable'; }
-    this.soundTimer = setTimeout(() => this.soundStatus(), 250);
+      a = await api.get('/api/audio');
+      el.textContent = a.receiving ? 'receiving from the tray app'
+        : state.status?.simulated ? 'simulated beat (no tray app)'
+        : 'nothing received. Start the tray app and check "React to sound" in its menu.';
+    } catch { el.textContent = 'service not reachable'; }
+    this.drawSound(a);
+    this.soundTimer = setTimeout(() => this.soundStatus(), 100);
+  },
+  drawSound(a) {
+    const c = $('#sound-bars'), g = c.getContext('2d'), w = c.width, hgt = c.height;
+    // Bars ease down, so the 10 Hz poll looks smooth enough; they jump up at once.
+    const bands = a?.bands ?? new Array(16).fill(0);
+    this.shownBands = bands.map((b, i) => Math.max(b, (this.shownBands?.[i] ?? 0) * 0.6));
+    g.clearRect(0, 0, w, hgt);
+    const n = bands.length, gap = 3, levelW = 10, bw = (w - levelW - 8 - gap * (n - 1)) / n;
+    const grad = g.createLinearGradient(0, 0, w - levelW - 8, 0);
+    grad.addColorStop(0, '#22d3ee'); grad.addColorStop(1, '#a855f7');
+    this.shownBands.forEach((b, i) => {
+      const x = i * (bw + gap), bh = Math.max(2, b * (hgt - 2));
+      g.fillStyle = '#262c3d'; g.fillRect(x, 0, bw, hgt);
+      g.fillStyle = grad; g.fillRect(x, hgt - bh, bw, bh);
+    });
+    const lh = (a?.level ?? 0) * hgt;
+    g.fillStyle = '#262c3d'; g.fillRect(w - levelW, 0, levelW, hgt);
+    g.fillStyle = '#e7e9f0'; g.fillRect(w - levelW, hgt - lh, levelW, lh);
+    // Beat light: on for 150 ms when the service's beat count changes.
+    if (a && this.lastBeats !== undefined && a.beats !== this.lastBeats) {
+      const light = $('#beat-light');
+      light.classList.add('on');
+      clearTimeout(this.beatOff);
+      this.beatOff = setTimeout(() => light.classList.remove('on'), 150);
+    }
+    if (a) this.lastBeats = a.beats;
   },
   // Hue variation of the chosen colors. "Random" needs bands, breaths or drops, so a still effect offers drift only.
   variationControls(set, slider) {

@@ -12,6 +12,9 @@ public sealed class RuntimeSettings
     public List<ZonePlacement> Layout { get; set; } = [];
     /// <summary>Lighting frames per second, 10..60. Null uses FrameRate from rgbblaster.json. Shared by all profiles.</summary>
     public int? LightingFps { get; set; }
+    /// <summary>Beat detection for all effects; see BeatTuning. Null uses the defaults (0.5 and 0 ms).</summary>
+    public float? BeatSensitivity { get; set; }
+    public int? BeatOffsetMs { get; set; }
 }
 
 public sealed class Profile

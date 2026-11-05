@@ -116,6 +116,46 @@ public class AudioTests
         Assert.False(d.Update(kick, 0.6));    // same sound data, rendered again
     }
 
+    /// <summary>Beat times shown for 10 s of kicks every 0.5 s, the first at 0.1 s; 60 frames per second, a new sound frame each.</summary>
+    private static List<double> Shown(BeatTuning tuning, float kickHeight = 0.8f)
+    {
+        var d = new BeatDetector(tuning);
+        var times = new List<double>();
+        for (int frame = 0; frame < 600; frame++)
+        {
+            double t = frame / 60.0;
+            float since = (float)((t - 0.1 + 0.5) % 0.5);
+            if (d.Update(Bass(0.1f + kickHeight * MathF.Exp(-since * 12)), t)) times.Add(t);
+        }
+        return times;
+    }
+
+    private static double KickPhase(double t) => ((t - 0.1) % 0.5 + 0.5) % 0.5; // seconds after the last kick
+
+    [Fact]
+    public void PositiveTimingDelaysEachBeat()
+    {
+        var shown = Shown(new BeatTuning { OffsetMs = 100 });
+        Assert.InRange(shown.Count, 18, 20);
+        Assert.All(shown, t => Assert.InRange(KickPhase(t), 0.09, 0.13));
+    }
+
+    [Fact]
+    public void NegativeTimingShowsSteadyBeatsEarly()
+    {
+        var shown = Shown(new BeatTuning { OffsetMs = -100 });
+        var late = shown.Where(t => t > 5).ToList();                  // tempo is steady by now
+        Assert.InRange(late.Count, 9, 11);                             // one per beat, none shown twice
+        Assert.All(late, t => Assert.InRange(KickPhase(t), 0.38, 0.42)); // 0.1 s before the next kick
+    }
+
+    [Fact]
+    public void LowSensitivityIgnoresSoftKicks()
+    {
+        Assert.InRange(Shown(new BeatTuning { Sensitivity = 0.5f }, kickHeight: 0.08f).Count, 15, 20);
+        Assert.Empty(Shown(new BeatTuning { Sensitivity = 0f }, kickHeight: 0.08f));
+    }
+
     private sealed class FixedAudio(AudioFrame f) : IAudioSource { public AudioFrame Current => f; }
 
     [Fact]

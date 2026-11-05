@@ -3,32 +3,91 @@ using RgbBlaster.Core;
 namespace RgbBlaster.Engine;
 
 /// <summary>
+/// Beat settings shared by every effect: they depend on the music and the speakers, not on the effect.
+/// The service sets <see cref="Shared"/> from the saved settings.
+/// </summary>
+public sealed class BeatTuning
+{
+    public static BeatTuning Shared { get; } = new();
+
+    private volatile float _sensitivity = 0.5f;
+    private volatile int _offsetMs;
+
+    /// <summary>0..1. 0.5 is the default; higher finds softer beats, lower only the strongest kicks.</summary>
+    public float Sensitivity { get => _sensitivity; set => _sensitivity = Math.Clamp(value, 0f, 1f); }
+
+    /// <summary>
+    /// Milliseconds, -250..250. Positive delays each beat. Negative shows each beat early: when the beats are steady,
+    /// the next one is predicted from the tempo and shown that much before it is heard.
+    /// </summary>
+    public int OffsetMs { get => _offsetMs; set => _offsetMs = Math.Clamp(value, -250, 250); }
+}
+
+/// <summary>
 /// Finds beats as sudden rises in the bass bands (onsets), not as a high bass level.
 /// The tray's auto-gain keeps loud music near full scale, so a level test stops firing after the first second;
 /// the rise from one sound frame to the next still shows each kick.
-/// A beat is a rise well above the usual rise of the last second. Feed it once per rendered frame;
-/// a frame object seen before (no new sound data) is skipped.
+/// A beat is a rise well above the usual rise of the last second. Feed it once per rendered frame.
+/// <see cref="BeatTuning.OffsetMs"/> moves the beats later (a delay) or earlier (predicted from the tempo).
 /// </summary>
-public sealed class BeatDetector
+public sealed class BeatDetector(BeatTuning? tuning = null)
 {
-    private const int BassBands = 3;
+    private const int BassBands = 3, History = 8;
+    private readonly BeatTuning _tuning = tuning ?? BeatTuning.Shared;
     private readonly float[] _prev = new float[BassBands];
     private AudioFrame? _frame;
     private float _mean, _square;
-    private double _lastBeat = double.NegativeInfinity, _lastT = double.NaN;
+    private double _lastOnset = double.NegativeInfinity, _lastT = double.NaN, _lastShown = double.NegativeInfinity;
+    private double _predictedFor = double.NegativeInfinity;
+    private readonly List<double> _onsets = [];
+    private readonly Queue<double> _due = new();
 
     /// <summary>Shortest time between beats, seconds. 0.22 s allows up to about 270 beats per minute.</summary>
     public float MinInterval { get; init; } = 0.22f;
 
-    /// <summary>How far above the usual rise a beat must be, in standard deviations.</summary>
-    public float Sensitivity { get; init; } = 2f;
+    /// <summary>Beat period in seconds while the beats are steady, else null.</summary>
+    public double? Period { get; private set; }
 
-    /// <summary>Smallest rise that counts, as a share of full scale. Keeps noise in quiet parts out.</summary>
-    public float Floor { get; init; } = 0.06f;
-
+    /// <summary>True on the frame where a beat is to be shown.</summary>
     public bool Update(AudioFrame frame, double t)
     {
-        if (ReferenceEquals(frame, _frame)) return false;
+        bool onset = !ReferenceEquals(frame, _frame) && Onset(frame, t);
+        if (onset) Remember(t);
+        double offset = _tuning.OffsetMs / 1000.0;
+        if (offset >= 0)
+        {
+            if (onset) _due.Enqueue(t + offset);
+            if (_due.Count == 0 || t < _due.Peek()) return false;
+            while (_due.Count > 0 && t >= _due.Peek()) _due.Dequeue();
+            return Show(t);
+        }
+
+        double lead = -offset;
+        _due.Clear();
+        if (Period is not { } p) return onset && Show(t);
+        if (onset)
+        {
+            // The heard beat that a prediction already showed: do not show it twice.
+            if (t - _lastShown < p * 0.5) return false;
+            return Show(t);
+        }
+        // Next beats predicted from the last heard one. Stop after four missing beats: the music has changed.
+        int k = (int)Math.Floor((t + lead - _lastOnset) / p);
+        if (k < 1 || k > 4) return false;
+        double next = _lastOnset + k * p;
+        if (next <= _predictedFor + p * 0.5 || t - (next - lead) > 0.1 || t - _lastShown < p * 0.5) return false;
+        _predictedFor = next;
+        return Show(t);
+    }
+
+    private bool Show(double t)
+    {
+        _lastShown = t;
+        return true;
+    }
+
+    private bool Onset(AudioFrame frame, double t)
+    {
         bool first = _frame is null;
         _frame = frame;
         float dt = double.IsNaN(_lastT) ? 0 : (float)Math.Clamp(t - _lastT, 0, 0.2);
@@ -44,13 +103,49 @@ public sealed class BeatDetector
         }
         if (n > 0) rise /= n;
 
+        // Sensitivity 0.5: a rise 2 standard deviations above the usual rise and at least 6% of full scale.
+        float s = _tuning.Sensitivity, deviations = 3 - 2 * s, floor = 0.06f * (1.5f - s);
         float sd = MathF.Sqrt(MathF.Max(0, _square - _mean * _mean));
-        bool beat = rise > _mean + Sensitivity * sd && rise > Floor && t - _lastBeat >= MinInterval;
+        bool beat = rise > _mean + deviations * sd && rise > floor && t - _lastOnset >= MinInterval;
         float k = 1 - MathF.Exp(-dt / 1f);
         _mean += (rise - _mean) * k;
         _square += (rise * rise - _square) * k;
-        if (beat) _lastBeat = t;
         return beat;
+    }
+
+    /// <summary>
+    /// Keeps the recent onsets and finds the tempo. Music has off-beats and fills between the kicks, so the gaps are not
+    /// all equal. Instead, a beat grid that starts at the last onset is fitted: the period, 0.3..1.05 s, that puts the most
+    /// of the last 8 onsets within 8% of a grid line. Steady when at least 6 of the 8 fit.
+    /// </summary>
+    private void Remember(double t)
+    {
+        _lastOnset = t;
+        _onsets.Add(t);
+        if (_onsets.Count > History) _onsets.RemoveAt(0);
+        Period = null;
+        if (_onsets.Count < History) return;
+        int bestHits = 0;
+        double best = 0;
+        for (double p = 0.3; p <= 1.05; p += 0.0025)
+        {
+            int hits = Hits(p);
+            if (hits > bestHits) { bestHits = hits; best = p; }
+        }
+        // A grid at half the beat also fits every beat; take the full beat when it fits nearly as well.
+        if (best < 0.525 && Hits(best * 2) >= bestHits - 2) { best *= 2; bestHits = Hits(best); }
+        if (bestHits >= History - 2) Period = best;
+    }
+
+    private int Hits(double period)
+    {
+        int hits = 0;
+        foreach (var x in _onsets)
+        {
+            double phase = (_lastOnset - x) / period % 1;
+            if (Math.Min(phase, 1 - phase) <= 0.08) hits++;
+        }
+        return hits;
     }
 }
 

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using RgbBlaster.Core;
+using RgbBlaster.Engine;
 
 namespace RgbBlaster.Service;
 
@@ -19,9 +20,15 @@ public sealed class AudioReceiver : IAudioSource, IDisposable
     private volatile AudioFrame _frame = AudioFrame.Silence;
     private long _lastTicks;
     private volatile bool _running = true;
+    private int _beats;
+    // Beats for the GUI meter: the shared sensitivity, as heard (no timing offset).
+    private readonly BeatTuning _meterTuning = new();
+    private readonly BeatDetector _meterBeats;
+    private readonly long _start = Stopwatch.GetTimestamp();
 
     public AudioReceiver(int port, Action<string> note)
     {
+        _meterBeats = new BeatDetector(_meterTuning);
         try
         {
             _udp = new UdpClient(new IPEndPoint(IPAddress.Loopback, port));
@@ -33,6 +40,9 @@ public sealed class AudioReceiver : IAudioSource, IDisposable
 
     /// <summary>True when levels arrived within the last second.</summary>
     public bool Receiving => _lastTicks != 0 && Stopwatch.GetElapsedTime(_lastTicks) < TimeSpan.FromSeconds(1);
+
+    /// <summary>Beats found in the received sound since the service started. The GUI meter flashes when it changes.</summary>
+    public int Beats => _beats;
 
     public AudioFrame Current => _lastTicks != 0 && Stopwatch.GetElapsedTime(_lastTicks) < StaleAfter ? _frame : AudioFrame.Silence;
 
@@ -48,6 +58,8 @@ public sealed class AudioReceiver : IAudioSource, IDisposable
                 {
                     _frame = f;
                     _lastTicks = Stopwatch.GetTimestamp();
+                    _meterTuning.Sensitivity = BeatTuning.Shared.Sensitivity;
+                    if (_meterBeats.Update(f, Stopwatch.GetElapsedTime(_start).TotalSeconds)) Interlocked.Increment(ref _beats);
                 }
             }
             catch (SocketException) when (_running) { /* e.g. ICMP port unreachable echo; keep listening */ }

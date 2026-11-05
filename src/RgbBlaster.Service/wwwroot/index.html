@@ -77,6 +77,11 @@
         </div>
         <div class="card">
           <div class="card-head"><h2>Preview</h2><span class="muted">Case side view: front left, rear right</span></div>
+          <div class="sound-meter" id="sound-meter" hidden>
+            <div class="beat-light" id="beat-light" title="Lights on each beat the service finds"><span>BEAT</span></div>
+            <canvas id="sound-bars" width="320" height="64"></canvas>
+            <div class="sound-text"><b id="sound-title">Sound</b><span id="sound-state">Checking sound…</span></div>
+          </div>
           <div class="case-view big" id="light-case"></div>
           <p class="hint">Changes apply live and are saved to the active profile.</p>
           <label class="field">Refresh rate <span class="val" id="light-fps-val"></span>
