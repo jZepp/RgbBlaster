@@ -336,19 +336,49 @@ const layout = {
     layout.points = await api.send('POST', '/api/leds/preview', layout.work);
     layout.drawDots();
   }, 150),
+  // The case outline is only a drawing guide; its size is a per-viewer setting kept in the browser.
+  caseBox: (() => {
+    try { const b = JSON.parse(localStorage.getItem('layoutCase')); if (b && b.w > 0 && b.h > 0) return b; } catch { }
+    return { x: 8, y: 8, w: 984, h: 609 };
+  })(),
   draw() {
     const svg = $('#layout-svg');
-    svg.replaceChildren(s('rect', { x: 8, y: 8, width: 984, height: 609, rx: 18, class: 'case-outline' }));
-    // Each side is named at the middle of its own edge; front and rear read along the edge.
-    const lab = (x, y, t, turn = 0) => {
-      const e = s('text', { x, y, class: 'case-label', 'text-anchor': 'middle', 'dominant-baseline': 'middle', transform: turn ? `rotate(${turn} ${x} ${y})` : '' });
-      e.textContent = t; return e;
-    };
-    svg.append(lab(500, 30, 'TOP'), lab(500, 597, 'BOTTOM'), lab(28, 312, 'FRONT', -90), lab(972, 312, 'REAR', 90));
-    this.shapes = s('g'); this.dots = s('g');
-    svg.append(this.shapes, this.dots);
+    this.guide = s('g'); this.shapes = s('g'); this.dots = s('g'); this.guideHandles = s('g');
+    svg.replaceChildren(this.guide, this.shapes, this.dots, this.guideHandles);
+    this.drawGuide();
     for (const p of this.work) this.shapes.append(this.shape(p));
     this.drawDots();
+  },
+  drawGuide() {
+    const { x, y, w, h } = this.caseBox;
+    // Each side is named at the middle of its own edge; front and rear read along the edge.
+    const lab = (lx, ly, t, turn = 0) => {
+      const e = s('text', { x: lx, y: ly, class: 'case-label', 'text-anchor': 'middle', 'dominant-baseline': 'middle', transform: turn ? `rotate(${turn} ${lx} ${ly})` : '' });
+      e.textContent = t; return e;
+    };
+    this.guide.replaceChildren(s('rect', { x, y, width: w, height: h, rx: 18, class: 'case-outline' }),
+      lab(x + w / 2, y + 22, 'TOP'), lab(x + w / 2, y + h - 20, 'BOTTOM'), lab(x + 20, y + h / 2, 'FRONT', -90), lab(x + w - 20, y + h / 2, 'REAR', 90));
+    // Corner handles: drag to resize, double-click to reset to the full map.
+    this.guideHandles.replaceChildren(...[[0, 0], [1, 0], [0, 1], [1, 1]].map(([cx, cy]) => {
+      const hd = s('rect', { x: x + cx * w - 7, y: y + cy * h - 7, width: 14, height: 14, rx: 3, class: 'case-handle' });
+      hd.addEventListener('pointerdown', e => {
+        e.stopPropagation();
+        this.caseDrag = { cx, cy, box: { ...this.caseBox } };
+        $('#layout-svg').setPointerCapture(e.pointerId);
+      });
+      hd.addEventListener('dblclick', () => { this.caseBox = { x: 8, y: 8, w: 984, h: 609 }; this.saveCase(); this.drawGuide(); });
+      return hd;
+    }));
+  },
+  saveCase() { try { localStorage.setItem('layoutCase', JSON.stringify(this.caseBox)); } catch { } },
+  moveCase(e) {
+    const { cx, cy, box } = this.caseDrag, pt = this.toSvg(e);
+    const px = Math.min(VW, Math.max(0, pt.x)), py = Math.min(VH, Math.max(0, pt.y)), min = 120;
+    let x1 = box.x, y1 = box.y, x2 = box.x + box.w, y2 = box.y + box.h;
+    if (cx) x2 = Math.max(x1 + min, px); else x1 = Math.min(x2 - min, px);
+    if (cy) y2 = Math.max(y1 + min, py); else y1 = Math.min(y2 - min, py);
+    this.caseBox = { x: Math.round(x1), y: Math.round(y1), w: Math.round(x2 - x1), h: Math.round(y2 - y1) };
+    this.drawGuide();
   },
   drawDots() {
     this.dots.replaceChildren();
@@ -481,6 +511,7 @@ const layout = {
     return { x: (e.clientX - r.left) / r.width * VW, y: (e.clientY - r.top) / r.height * VH };
   },
   move(e) {
+    if (this.caseDrag) { this.moveCase(e); return; }
     if (!this.drag) return;
     const { p, mode, x0, y0, orig } = this.drag;
     const pt = this.toSvg(e);
@@ -512,7 +543,20 @@ const layout = {
     this.editor();
   },
   refresh() { this.draw(); this.list(); this.editor(); },
-  select(d, z) { this.sel = this.key(d, z); this.group = new Set([this.sel]); this.refresh(); },
+  // Side panel. Open state is a per-viewer convenience kept in the browser.
+  drawer(open, tab) {
+    const page = $('#page-layout');
+    if (open !== undefined) {
+      page.classList.toggle('drawer-open', open);
+      try { localStorage.setItem('layoutDrawer', open ? '1' : '0'); } catch { }
+    }
+    if (tab) this.tab = tab;
+    this.tab ??= 'zones';
+    for (const b of $$('#drawer-tabs button')) b.classList.toggle('on', b.dataset.tab === this.tab);
+    for (const p of $$('.drawer-body [data-pane]')) p.classList.toggle('on', p.dataset.pane === this.tab);
+    $('#drawer-toggle').textContent = page.classList.contains('drawer-open') ? 'Zones ◂' : 'Zones ▸';
+  },
+  select(d, z) { this.sel = this.key(d, z); this.group = new Set([this.sel]); this.refresh(); this.drawer(undefined, 'edit'); },
   toggle(d, z) {
     const k = this.key(d, z);
     if (this.group.has(k)) { this.group.delete(k); if (this.sel === k) this.sel = [...this.group][0] ?? null; }
@@ -524,6 +568,7 @@ const layout = {
     this.group = new Set(keys);
     this.sel = keys[0] ?? null;
     this.refresh();
+    this.drawer(undefined, 'edit');
   },
   list() {
     const devices = [...new Set(state.leds.map(z => z.device))];
@@ -590,7 +635,12 @@ const layout = {
   },
 };
 $('#layout-svg').addEventListener('pointermove', e => layout.move(e));
+for (const b of $$('#drawer-tabs button')) b.onclick = () => layout.drawer(undefined, b.dataset.tab);
+$('#drawer-close').onclick = () => layout.drawer(false);
+$('#drawer-toggle').onclick = () => layout.drawer(!$('#page-layout').classList.contains('drawer-open'));
+{ let open = true; try { open = localStorage.getItem('layoutDrawer') !== '0'; } catch { } layout.drawer(open); }
 $('#layout-svg').addEventListener('pointerup', () => {
+  if (layout.caseDrag) { layout.caseDrag = null; layout.saveCase(); return; }
   const d = layout.drag;
   layout.drag = null;
   // A click without a drag on a member of a group edits that zone alone.

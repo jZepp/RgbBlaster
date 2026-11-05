@@ -90,28 +90,33 @@
 
     <!-- Layout -->
     <section class="page" id="page-layout" hidden>
-      <div class="grid side-wide">
-        <div class="card">
+      <div class="card layout-card">
           <div class="card-head">
             <h2>Case layout</h2>
             <div class="btns">
               <label class="toggle"><input type="checkbox" id="layout-bg" checked> Live effect behind</label>
               <button class="btn" id="layout-revert">Revert</button>
               <button class="btn primary" id="layout-save">Save layout</button>
+              <button class="btn" id="drawer-toggle" title="Show or hide the zone panel">Zones ▸</button>
             </div>
           </div>
           <div class="layout-stage" id="layout-stage">
             <canvas id="layout-canvas"></canvas>
             <svg id="layout-svg" viewBox="0 0 1000 625"></svg>
           </div>
-          <p class="hint">Drag a zone to move it. Double-click a zone, or click a device name in the zone list, to select the whole device and move it as one. Ctrl- or Shift-click adds or removes single zones. The larger ringed dot is LED 1 of each zone: if the lights run the wrong way round, set the zone's LED 1 position or direction. Drag the round handle to resize a ring or move a line end. Effects such as waves and rings travel across this map, so place each light where it sits in the case.</p>
-        </div>
-        <div class="card">
-          <div class="card-head"><h2>Zones</h2></div>
-          <div id="zone-list" class="zone-list"></div>
-          <div id="zone-edit" class="params"></div>
-        </div>
+          <details class="hint"><summary>How to use</summary>Drag a zone to move it. Double-click a zone, or click a device name in the zone list, to select the whole device and move it as one. Ctrl- or Shift-click adds or removes single zones. The larger ringed dot is LED 1 of each zone: if the lights run the wrong way round, set the zone's LED 1 position or direction. Drag the round handle to resize a ring or move a line end. Effects such as waves and rings travel across this map, so place each light where it sits in the case.
+          Select a zone or a device to rotate or mirror it in the Edit tab.</details>
       </div>
+      <aside class="layout-drawer" id="layout-drawer">
+        <div class="drawer-head">
+          <div class="seg" id="drawer-tabs"><button data-tab="zones">Zones</button><button data-tab="edit">Edit</button></div>
+          <button class="btn small" id="drawer-close" title="Hide the panel">✕</button>
+        </div>
+        <div class="drawer-body">
+          <div id="zone-list" class="zone-list" data-pane="zones"></div>
+          <div id="zone-edit" class="params" data-pane="edit"></div>
+        </div>
+      </aside>
     </section>
 
     <!-- Fans -->
