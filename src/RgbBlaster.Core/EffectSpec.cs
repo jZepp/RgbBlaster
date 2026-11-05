@@ -42,6 +42,7 @@ public sealed class EffectSpec
     public float RingWidth { get; set; } = 0.08f;
 
     /// <summary>True when the effect needs sound levels.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
     public bool UsesSound => Type is "spectrum" or "beat" || (Sound is not null && Sound != "off");
 
     /// <summary>The palette, falling back to Color and Color2.</summary>
