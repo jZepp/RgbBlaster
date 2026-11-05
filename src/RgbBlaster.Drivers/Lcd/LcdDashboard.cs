@@ -271,10 +271,41 @@ public sealed class LcdDashboard : IDisposable
         g.DrawString(tag, _tag, Brushes.White, new RectangleF(tx - 14, ty - 13, 28, 28), _center);
     }
 
+    /// <summary>Metal hub cap lit from the top left, then the glass reflection over the whole dial.</summary>
     private static void Hub(Graphics g)
     {
-        using (var hub = new SolidBrush(Color.FromArgb(40, 40, 46))) g.FillEllipse(hub, Cx - 22, Cy - 22, 44, 44);
-        using (var hubRing = new Pen(Color.FromArgb(120, 120, 130), 3)) g.DrawEllipse(hubRing, Cx - 22, Cy - 22, 44, 44);
+        using (var path = new GraphicsPath())
+        {
+            path.AddEllipse(Cx - 22, Cy - 22, 44, 44);
+            using var cap = new PathGradientBrush(path)
+            {
+                CenterPoint = new PointF(Cx - 7, Cy - 7),
+                CenterColor = Color.FromArgb(175, 175, 185),
+                SurroundColors = [Color.FromArgb(28, 28, 34)],
+            };
+            g.FillPath(cap, path);
+        }
+        using (var hubRing = new Pen(Color.FromArgb(90, 90, 100), 2)) g.DrawEllipse(hubRing, Cx - 22, Cy - 22, 44, 44);
+        Glass(g);
+    }
+
+    /// <summary>Faint reflection on the upper half of the dial glass, fading downward.</summary>
+    private static void Glass(Graphics g)
+    {
+        var state = g.Save();
+        using (var clip = new GraphicsPath())
+        {
+            clip.AddEllipse(Cx - 226, Cy - 226, 452, 452);
+            g.SetClip(clip);
+        }
+        var shine = new RectangleF(Cx - 200, Cy - 236, 400, 250);
+        using (var path = new GraphicsPath())
+        {
+            path.AddEllipse(shine);
+            using var brush = new LinearGradientBrush(shine, Color.FromArgb(34, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90f);
+            g.FillPath(brush, path);
+        }
+        g.Restore(state);
     }
 
     /// <summary>Bezel, face, red zone, ticks and numbers of the temperature dial.</summary>
@@ -283,10 +314,33 @@ public sealed class LcdDashboard : IDisposable
         const float start = DialStart, sweep = DialSweep, rOuter = DialOuter;
         float Angle(float temp) => DialAngle(temp);
 
-        // Bezel rings.
-        using (var bezel = new Pen(Color.FromArgb(70, 70, 78), 4)) g.DrawEllipse(bezel, Cx - 234, Cy - 234, 468, 468);
         // Over a background the face is part see-through, so the lighting shows behind the dial.
-        using (var face = new SolidBrush(Color.FromArgb(_overBackground ? 150 : 255, 14, 14, 18))) g.FillEllipse(face, Cx - 230, Cy - 230, 460, 460);
+        int alpha = _overBackground ? 150 : 255;
+
+        // Metal bezel: a ring lit from the top left.
+        var outer = new RectangleF(Cx - 239, Cy - 239, 478, 478);
+        using (var ring = new GraphicsPath())
+        {
+            ring.AddEllipse(outer);
+            ring.AddEllipse(Cx - 227, Cy - 227, 454, 454);
+            using var metal = new LinearGradientBrush(outer, Color.FromArgb(205, 205, 215), Color.FromArgb(35, 35, 42), 45f);
+            g.FillPath(metal, ring);
+        }
+
+        // Face: lighter near the middle, darker toward the rim.
+        using (var face = new GraphicsPath())
+        {
+            face.AddEllipse(Cx - 227, Cy - 227, 454, 454);
+            using var shade = new PathGradientBrush(face)
+            {
+                CenterPoint = new PointF(Cx, Cy - 40),
+                CenterColor = Color.FromArgb(alpha, 40, 42, 50),
+                SurroundColors = [Color.FromArgb(alpha, 6, 6, 8)],
+            };
+            g.FillPath(shade, face);
+        }
+        // Shadow under the bezel gives the face depth.
+        using (var shadow = new Pen(Color.FromArgb(120, 0, 0, 0), 12)) g.DrawEllipse(shadow, Cx - 221, Cy - 221, 442, 442);
 
         // Red zone: a solid band on the outer edge.
         float redStart = Angle(RedLine);
