@@ -1,0 +1,11 @@
+<Project>
+  <!--
+    One version for every project. Bump VersionPrefix for each release and tag the commit vX.Y.Z.
+    MAJOR: settings.json or API changes that need manual steps. MINOR: new features. PATCH: fixes.
+    The SDK appends the git commit to InformationalVersion, for example 0.1.0+b2ee5d0...
+  -->
+  <PropertyGroup>
+    <VersionPrefix>0.1.0</VersionPrefix>
+    <Product>RgbBlaster</Product>
+  </PropertyGroup>
+</Project>

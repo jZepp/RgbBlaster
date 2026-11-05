@@ -229,6 +229,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
         lock (_gate)
             return new
             {
+                version = AppVersion.Display,
                 simulated = simulate,
                 activeProfile = _settings.ActiveProfile,
                 cpu = s.Cpu,

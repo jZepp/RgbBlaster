@@ -30,6 +30,7 @@ internal static class Program
         var menu = new ContextMenuStrip();
         menu.Items.Add(new ToolStripMenuItem("Open RgbBlaster", null, (_, _) => Open(url)) { Font = new Font(menu.Font, FontStyle.Bold) });
         menu.Items.Add(state);
+        menu.Items.Add(new ToolStripMenuItem($"Tray version {AppVersion.Display}") { Enabled = false });
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Restart service", null, (_, _) => Elevated($"Restart-Service -Name {ServiceName} -Force"));
         menu.Items.Add("Stop service", null, (_, _) => Elevated($"Stop-Service -Name {ServiceName} -Force"));
@@ -44,14 +45,20 @@ internal static class Program
         bool? last = null;
         async void Poll()
         {
-            bool ok;
-            try { ok = (await http.GetAsync(url + "api/status")).IsSuccessStatusCode; }
-            catch { ok = false; }
+            string? version = null;
+            try
+            {
+                using var r = await http.GetAsync(url + "api/version");
+                if (r.IsSuccessStatusCode)
+                    version = System.Text.Json.JsonDocument.Parse(await r.Content.ReadAsStringAsync()).RootElement.GetProperty("version").GetString() ?? "?";
+            }
+            catch { /* service not running */ }
+            bool ok = version is not null;
             if (ok == last) return;
             last = ok;
             tray.Icon = ok ? up : down;
-            tray.Text = ok ? "RgbBlaster: running" : "RgbBlaster: service not running";
-            state.Text = ok ? "Service running" : "Service not running";
+            tray.Text = ok ? $"RgbBlaster {version}: running" : "RgbBlaster: service not running";
+            state.Text = ok ? $"Service {version} running" : "Service not running";
         }
         using var timer = new System.Windows.Forms.Timer { Interval = 3000 };
         timer.Tick += (_, _) => Poll();

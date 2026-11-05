@@ -129,7 +129,7 @@ let lastPreview = 0;
 async function tickStatus() {
   try {
     state.status = await api.get('/api/status');
-    $('#conn').textContent = 'Service connected';
+    $('#conn').textContent = `Service connected · v${state.status.version ?? '?'}`;
     $('#conn').className = 'nav-foot ok';
     $('#sim-badge').hidden = !state.status.simulated;
     if (state.settings && state.status.activeProfile !== state.settings.activeProfile) { await loadSettings(); pages[current]?.enter?.(); }

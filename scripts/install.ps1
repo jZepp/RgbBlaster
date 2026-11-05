@@ -53,5 +53,6 @@ $tray = Join-Path $InstallDir 'rgbblaster-tray.exe'
 Set-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'RgbBlasterTray' -Value "`"$tray`""
 Start-Process explorer.exe -ArgumentList "`"$tray`""
 
-Write-Host "Installed. Service: $((Get-Service $name).Status). GUI: http://localhost:27830/" -ForegroundColor Green
+$version = (Get-Item $exe).VersionInfo.ProductVersion
+Write-Host "Installed RgbBlaster $version. Service: $((Get-Service $name).Status). GUI: http://localhost:27830/" -ForegroundColor Green
 Write-Host "Close vendor RGB apps (iCUE, Redragon, etc.); they fight over the same devices."

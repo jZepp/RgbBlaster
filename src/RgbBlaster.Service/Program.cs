@@ -41,6 +41,7 @@ builder.Services.AddSingleton(sp => new RgbRuntime(config, sp.GetRequiredService
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RgbRuntime>());
 
 var app = builder.Build();
+app.Logger.LogInformation("RgbBlaster {Version}{Mode}", AppVersion.Display, simulate ? " (simulation)" : "");
 
 // The API has no login. Two checks keep other web pages out:
 // - the Host header must be a local name, which blocks DNS rebinding;
@@ -75,6 +76,7 @@ api.MapGet("/status", () => Results.Json(rt().Status()));
 api.MapGet("/history", () => rt().History());
 api.MapGet("/messages", () => rt().Messages());
 api.MapGet("/sensors", () => rt().Sensors());
+api.MapGet("/version", () => new { version = AppVersion.Version, commit = AppVersion.Commit });
 api.MapGet("/settings", () => rt().Settings());
 api.MapGet("/effects", () => EffectFactory.Types);
 api.MapGet("/leds", () => Results.Json(rt().LedPoints()));
