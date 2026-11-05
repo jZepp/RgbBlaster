@@ -3,21 +3,52 @@ using RgbBlaster.Core;
 namespace RgbBlaster.Engine;
 
 /// <summary>
-/// Finds beats in the bass level: a beat is a bass level clearly above its average of the last second.
-/// Feed it once per frame.
+/// Finds beats as sudden rises in the bass bands (onsets), not as a high bass level.
+/// The tray's auto-gain keeps loud music near full scale, so a level test stops firing after the first second;
+/// the rise from one sound frame to the next still shows each kick.
+/// A beat is a rise well above the usual rise of the last second. Feed it once per rendered frame;
+/// a frame object seen before (no new sound data) is skipped.
 /// </summary>
 public sealed class BeatDetector
 {
-    private float _avg;
-    private double _lastBeat = double.NegativeInfinity;
+    private const int BassBands = 3;
+    private readonly float[] _prev = new float[BassBands];
+    private AudioFrame? _frame;
+    private float _mean, _square;
+    private double _lastBeat = double.NegativeInfinity, _lastT = double.NaN;
 
     /// <summary>Shortest time between beats, seconds. 0.22 s allows up to about 270 beats per minute.</summary>
     public float MinInterval { get; init; } = 0.22f;
 
-    public bool Update(float bass, float dt, double t)
+    /// <summary>How far above the usual rise a beat must be, in standard deviations.</summary>
+    public float Sensitivity { get; init; } = 2f;
+
+    /// <summary>Smallest rise that counts, as a share of full scale. Keeps noise in quiet parts out.</summary>
+    public float Floor { get; init; } = 0.06f;
+
+    public bool Update(AudioFrame frame, double t)
     {
-        bool beat = bass > 0.2f && bass > _avg * 1.3f + 0.05f && t - _lastBeat >= MinInterval;
-        _avg += (bass - _avg) * (1 - MathF.Exp(-dt / 1f));
+        if (ReferenceEquals(frame, _frame)) return false;
+        bool first = _frame is null;
+        _frame = frame;
+        float dt = double.IsNaN(_lastT) ? 0 : (float)Math.Clamp(t - _lastT, 0, 0.2);
+        _lastT = t;
+
+        var bands = frame.Bands;
+        int n = Math.Min(BassBands, bands.Length);
+        float rise = 0;
+        for (int i = 0; i < n; i++)
+        {
+            if (!first) rise += MathF.Max(0, bands[i] - _prev[i]);
+            _prev[i] = bands[i];
+        }
+        if (n > 0) rise /= n;
+
+        float sd = MathF.Sqrt(MathF.Max(0, _square - _mean * _mean));
+        bool beat = rise > _mean + Sensitivity * sd && rise > Floor && t - _lastBeat >= MinInterval;
+        float k = 1 - MathF.Exp(-dt / 1f);
+        _mean += (rise - _mean) * k;
+        _square += (rise * rise - _square) * k;
         if (beat) _lastBeat = t;
         return beat;
     }
@@ -84,7 +115,7 @@ public sealed class BeatPulseEffect(Palette colors, IAudioSource audio, float sp
         float dt = double.IsNaN(_last) ? 0 : (float)Math.Clamp(t - _last, 0, 0.2);
         _last = t;
         var frame = audio.Current;
-        if (_beats.Update(frame.Bass, dt, t))
+        if (_beats.Update(frame, t))
         {
             _rings.Add((t, _count++));
             if (_rings.Count > MaxRings) _rings.RemoveAt(0);
@@ -121,7 +152,7 @@ public sealed class BeatPulseEffect(Palette colors, IAudioSource audio, float sp
     }
 }
 
-/// <summary>Makes any effect follow the sound: its brightness, its speed, a flash on each beat, or a kick back on loud hits.</summary>
+/// <summary>Makes any effect follow the sound: its brightness, its speed, a flash on each beat, or a kick back on each beat.</summary>
 /// <param name="mode">"brightness", "speed", "beat" or "kick".</param>
 /// <param name="amount">0..1: how much the sound changes the effect. 1 means dark (or stopped) in silence.</param>
 public sealed class SoundFollowEffect(IEffect inner, IAudioSource audio, string mode, float amount) : IEffect
@@ -149,15 +180,15 @@ public sealed class SoundFollowEffect(IEffect inner, IAudioSource audio, string 
                 inner.Render(canvas, _warped);
                 return;
             case "kick":
-                // A loud hit pushes the effect backward: at full strength it runs back at twice normal speed,
+                // Each beat pushes the effect backward: at full strength it runs back at twice normal speed,
                 // then the push fades over about a quarter second and the effect goes forward again.
                 // Net effect of one hit at full strength: about 0.75 s of motion undone.
-                _push = _beats.Update(frame.Level, dt, t) ? 1 : _push * MathF.Exp(-dt / 0.25f);
+                _push = _beats.Update(frame, t) ? 1 : _push * MathF.Exp(-dt / 0.25f);
                 _warped += dt * (1 - a * 3 * _push);
                 inner.Render(canvas, _warped);
                 return;
             case "beat":
-                _flash = _beats.Update(frame.Bass, dt, t) ? 1 : _flash * MathF.Exp(-dt * 5);
+                _flash = _beats.Update(frame, t) ? 1 : _flash * MathF.Exp(-dt * 5);
                 inner.Render(canvas, t);
                 Dim(canvas, (1 - a) + a * _flash);
                 return;

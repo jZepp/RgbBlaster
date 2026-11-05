@@ -75,6 +75,8 @@ public class AudioTests
         Assert.Null(AudioPacket.Decode([]));
     }
 
+    private static AudioFrame Bass(float v) => new(v, [v, v, v, .. new float[13]]);
+
     [Fact]
     public void BeatDetectorFindsKicksAt120Bpm()
     {
@@ -83,10 +85,35 @@ public class AudioTests
         for (int frame = 0; frame < 60 * 4; frame++)
         {
             double t = frame / 60.0;
-            float bass = 0.1f + 0.8f * MathF.Exp(-(float)(t % 0.5) * 12);
-            if (d.Update(bass, 1 / 60f, t)) beats++;
+            if (d.Update(Bass(0.1f + 0.8f * MathF.Exp(-(float)(t % 0.5) * 12)), t)) beats++;
         }
-        Assert.InRange(beats, 7, 8); // 8 kicks in 4 s; the first may be missed while the average settles
+        Assert.InRange(beats, 7, 8); // 8 kicks in 4 s
+    }
+
+    [Fact]
+    public void BeatDetectorKeepsFindingKicksWhenAutoGainHoldsTheBassNearFullScale()
+    {
+        // Loud music after auto-gain: the bass never falls below 0.7, and each kick lifts it to 1 for a moment.
+        // The old level test (bass above 1.3 × its average) stopped firing after the first second of this.
+        var d = new BeatDetector();
+        var times = new List<double>();
+        for (int frame = 0; frame < 60 * 20; frame++)
+        {
+            double t = frame / 60.0;
+            float jitter = 0.03f * MathF.Sin(frame * 1.7f);
+            if (d.Update(Bass(0.7f + jitter + 0.3f * MathF.Exp(-(float)(t % 0.6) * 15)), t)) times.Add(t);
+        }
+        Assert.InRange(times.Count(t => t >= 10), 15, 17); // 0.6 s beats: about 16 in the last 10 s
+    }
+
+    [Fact]
+    public void BeatDetectorSkipsARepeatedFrame()
+    {
+        var d = new BeatDetector();
+        var kick = Bass(1);
+        d.Update(Bass(0), 0);
+        Assert.True(d.Update(kick, 0.3));
+        Assert.False(d.Update(kick, 0.6));    // same sound data, rendered again
     }
 
     private sealed class FixedAudio(AudioFrame f) : IAudioSource { public AudioFrame Current => f; }
@@ -158,7 +185,7 @@ public class AudioTests
     }
 
     [Fact]
-    public void KickBackRunsTheEffectBackwardAfterALoudHit()
+    public void KickBackRunsTheEffectBackwardAfterABeat()
     {
         var src = new MutableAudio();
         var probe = new TimeProbe();
@@ -168,7 +195,7 @@ public class AudioTests
         for (int i = 0; i <= 60; i++) e.Render(c, i / 60.0);          // quiet second: moves forward
         double before = probe.T;
         Assert.InRange(before, 0.95, 1.05);
-        src.Frame = new AudioFrame(1, new float[16]);                   // loud hit
+        src.Frame = Bass(1);                                            // kick
         for (int i = 61; i <= 75; i++) e.Render(c, i / 60.0);
         Assert.True(probe.T < before - 0.1, $"expected a step back from {before}, got {probe.T}");
         src.Frame = new AudioFrame(0.1f, new float[16]);
