@@ -27,7 +27,9 @@ public static class EffectFactory
             "solid" => new SolidEffect(palette),
             "breathe" => new BreathingEffect(palette, 1f / speed),
             "wave" => new WaveEffect(palette, speed, s.Angle, scale, s.Spacing),
-            "radial" => new RadialEffect(palette, speed, scale, s.CenterX, s.CenterY, s.Spacing),
+            "radial" => (s.Sound ?? "").Equals("rings", StringComparison.OrdinalIgnoreCase)
+                ? new RadialEffect(palette, speed, scale, s.CenterX, s.CenterY, s.Spacing, audio, s.SoundAmount)
+                : new RadialEffect(palette, speed, scale, s.CenterX, s.CenterY, s.Spacing),
             // Settings saved before palettes existed cycle the full hue wheel.
             "cycle" => s.Colors.Count > 0 ? new ColorCycleEffect(palette, speed) : new ColorCycleEffect(speed),
             "gradient" => new GradientEffect(palette, s.Angle),

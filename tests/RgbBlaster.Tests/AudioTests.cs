@@ -133,6 +133,23 @@ public class AudioTests
         Assert.Contains(c.Pixels, p => p.R > 100);
     }
 
+    [Fact]
+    public void FrequencyRingsLightTheCenterOnBassAndTheEdgeOnTreble()
+    {
+        var spec = new EffectSpec { Type = "radial", Colors = ["#FFFFFF"], Sound = "rings", SoundAmount = 1, CenterX = 0.5f, CenterY = 0.5f };
+        Assert.True(spec.UsesSound);
+        Assert.False(new EffectSpec { Type = "wave", Sound = "rings" }.UsesSound);
+        var bass = new float[16]; bass[0] = bass[1] = 1;
+        var treble = new float[16]; treble[14] = treble[15] = 1;
+        var c = new Canvas(40, 40);
+        EffectFactory.Create(spec, new FixedAudio(new AudioFrame(1, bass))).Render(c, 0);
+        Assert.Equal(Rgb.White, c.Row(20)[20]);       // center lit
+        Assert.Equal(Rgb.Black, c.Row(0)[0]);         // corner dark
+        EffectFactory.Create(spec, new FixedAudio(new AudioFrame(1, treble))).Render(c, 0);
+        Assert.Equal(Rgb.Black, c.Row(20)[20]);
+        Assert.NotEqual(Rgb.Black, c.Row(0)[0]);
+    }
+
     private sealed class MutableAudio : IAudioSource
     {
         public AudioFrame Frame = AudioFrame.Silence;

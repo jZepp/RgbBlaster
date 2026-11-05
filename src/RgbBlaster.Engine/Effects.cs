@@ -96,8 +96,17 @@ public sealed class GradientEffect(Palette colors, float angleDegrees) : IEffect
 }
 
 /// <summary>Rings of the palette colors that grow out of a center point.</summary>
-public sealed class RadialEffect(Palette colors, float speedHz, float rings, float cx, float cy, float spacing = 0) : IEffect
+/// <param name="audio">
+/// Frequency rings: when set, the brightness at each distance from the center follows one part of the spectrum,
+/// bass at the center and treble at the farthest corner.
+/// </param>
+/// <param name="soundAmount">0..1: how much the sound sets the brightness. 1 means dark in silence.</param>
+public sealed class RadialEffect(Palette colors, float speedHz, float rings, float cx, float cy, float spacing = 0,
+    IAudioSource? audio = null, float soundAmount = 0) : IEffect
 {
+    private float[] _shown = [];
+    private double _last = double.NaN;
+
     public string Name => "radial";
     public NativeEffect Native => new(NativeEffectKind.Wave, colors[0], speedHz > 0 ? 1f / speedHz : 0, Random: colors.Count > 2);
 
@@ -105,13 +114,36 @@ public sealed class RadialEffect(Palette colors, float speedHz, float rings, flo
     {
         float phase = (float)(t * speedHz);
         float w = canvas.Width, h = canvas.Height;
+        float dt = double.IsNaN(_last) ? 0 : (float)Math.Clamp(t - _last, 0, 0.2);
+        _last = t;
+        if (audio is not null)
+        {
+            var bands = audio.Current.Bands;
+            if (_shown.Length != bands.Length) _shown = new float[bands.Length];
+            // Fast rise, 0.15 s fall, so the rings do not flicker with every sample.
+            float fall = 1 - MathF.Exp(-dt / 0.15f);
+            for (int i = 0; i < bands.Length; i++)
+                _shown[i] = bands[i] >= _shown[i] ? bands[i] : _shown[i] + (bands[i] - _shown[i]) * fall;
+        }
+        bool follow = audio is not null && _shown.Length > 1;
+        float a = Math.Clamp(soundAmount, 0, 1), n1 = _shown.Length - 1;
+        // Distance to the farthest corner, so the treble band reaches the edge of the case from any center point.
+        float far = MathF.Sqrt(MathF.Max(cx * cx, (1 - cx) * (1 - cx)) + MathF.Max(cy * cy, (1 - cy) * (1 - cy)));
         for (int y = 0; y < canvas.Height; y++)
         {
             var row = canvas.Row(y);
             for (int x = 0; x < canvas.Width; x++)
             {
-                float ddx = x / w - cx, ddy = y / h - cy;
-                row[x] = colors.Bands(MathF.Sqrt(ddx * ddx + ddy * ddy) * rings - phase, spacing);
+                float ddx = x / w - cx, ddy = y / h - cy, d = MathF.Sqrt(ddx * ddx + ddy * ddy);
+                var c = colors.Bands(d * rings - phase, spacing);
+                if (follow)
+                {
+                    float p = Math.Clamp(d / far, 0, 1) * n1;
+                    int i = Math.Min((int)p, (int)n1 - 1);
+                    float level = _shown[i] + (_shown[i + 1] - _shown[i]) * (p - i);
+                    c = c.Scale((1 - a) + a * level);
+                }
+                row[x] = c;
             }
         }
     }

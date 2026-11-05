@@ -34,7 +34,10 @@ public sealed class EffectSpec
     public float VariationAmount { get; set; } = 60;
     /// <summary>Drift: seconds for one full swing.</summary>
     public float VariationSeconds { get; set; } = 20;
-    /// <summary>"off"; "brightness", "speed" or "beat": the effect follows the sound captured by the tray app.</summary>
+    /// <summary>
+    /// "off"; "brightness", "speed" or "beat": the effect follows the sound captured by the tray app.
+    /// "rings" (Ripple only): each ring follows one part of the spectrum.
+    /// </summary>
     public string Sound { get; set; } = "off";
     /// <summary>0..1: how much the sound changes the effect.</summary>
     public float SoundAmount { get; set; } = 0.7f;
@@ -43,7 +46,9 @@ public sealed class EffectSpec
 
     /// <summary>True when the effect needs sound levels.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
-    public bool UsesSound => Type is "spectrum" or "beat" || (Sound is not null && Sound != "off");
+    public bool UsesSound => Type is "spectrum" or "beat"
+        || Sound is "brightness" or "speed" or "beat"
+        || (Sound is "rings" && Type is "radial");
 
     /// <summary>The palette, falling back to Color and Color2.</summary>
     public IReadOnlyList<string> PaletteOrDefault() => Colors.Count > 0 ? Colors : [Color, Color2];

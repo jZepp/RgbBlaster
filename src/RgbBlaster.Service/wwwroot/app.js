@@ -311,9 +311,13 @@ const lighting = {
     const s = this.spec, kids = [];
     if (!soundEffect) {
       s.sound ??= 'off'; s.soundAmount ??= 0.7;
+      // Frequency rings is a Ripple mode only.
+      if (s.sound === 'rings' && s.type !== 'radial') s.sound = 'off';
       kids.push(h('div', { class: 'field' }, 'Follow sound', h('div', { class: 'seg' },
-        ...[['off', 'Off'], ['brightness', 'Brightness'], ['speed', 'Speed'], ['beat', 'Flash on beat']].map(([v, t]) =>
+        ...[['off', 'Off'], ['brightness', 'Brightness'], ['speed', 'Speed'], ['beat', 'Flash on beat'],
+          ...(s.type === 'radial' ? [['rings', 'Frequency rings']] : [])].map(([v, t]) =>
           h('button', { class: s.sound === v ? 'on' : '', onclick: () => { set('sound', v); this.render(); } }, t)))));
+      if (s.sound === 'rings') kids.push(h('div', { class: 'hint' }, 'Rings near the center follow the bass; the outer rings follow the treble.'));
       if (s.sound !== 'off') kids.push(slider('soundAmount', 'Sound effect strength', 0.1, 1, 0.05, v => `${Math.round(v * 100)}%`));
     }
     if (soundEffect || s.sound !== 'off') {
