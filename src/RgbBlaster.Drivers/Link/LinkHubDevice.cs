@@ -76,6 +76,7 @@ public sealed class LinkHubDevice : IRgbDevice, IFanDevice
         {
             Firmware = L.ParseFirmware(Send(L.CmdFirmware));
             Send(L.CmdSoftwareMode);
+            _colorOpen = false;
             SubDevices = ReadDevices();
         }
 
@@ -115,6 +116,11 @@ public sealed class LinkHubDevice : IRgbDevice, IFanDevice
     /// </summary>
     public TimeSpan KeepAlive { get; set; } = TimeSpan.FromSeconds(1);
 
+    /// <summary>Shortest time between color frames. OpenLinkHub waits 20 ms after each frame.</summary>
+    public TimeSpan MinFrameInterval { get; set; } = TimeSpan.FromMilliseconds(20);
+
+    private bool _colorOpen;
+
     /// <summary>
     /// Sends all LEDs in channel order as one color frame when anything changed or <see cref="KeepAlive"/> expired.
     /// Assumption to verify on hardware: the hub expects every LED-capable device, concatenated by channel.
@@ -126,6 +132,8 @@ public sealed class LinkHubDevice : IRgbDevice, IFanDevice
         {
             lock (_stage) _staged.CopyTo(_sending, 0);
             if (_sentValid && _sending.AsSpan().SequenceEqual(_sent) && _sinceSend.Elapsed < KeepAlive) return;
+            // Changed colors wait for the next call when the last frame went out less than MinFrameInterval ago.
+            if (_sentValid && _sinceSend.Elapsed < MinFrameInterval) return;
 
             var rgb = new byte[_sending.Length * 3];
             for (int i = 0; i < _sending.Length; i++)
@@ -137,14 +145,25 @@ public sealed class LinkHubDevice : IRgbDevice, IFanDevice
             var frame = L.Frame(L.TypeColor, rgb);
 
             EnsureMode();
-            Send(L.CmdClose, [L.EpColor]);
-            Send(L.CmdOpenColor, [L.EpColor]);
-            for (int pos = 0; pos < frame.Length; pos += L.MaxChunk)
+            // The color endpoint stays open between frames, as OpenLinkHub does. With animated effects, frames sent
+            // at up to 60 per second with a close and reopen around each one made the AIO pump head drop off USB
+            // about every 10 minutes; static lighting did not.
+            if (!_colorOpen)
             {
-                var chunk = frame.AsSpan(pos, Math.Min(L.MaxChunk, frame.Length - pos));
-                Send(pos == 0 ? L.CmdWriteColor : L.CmdWriteColorNext, chunk);
+                Send(L.CmdClose, [L.EpColor]);
+                Send(L.CmdOpenColor, [L.EpColor]);
+                _colorOpen = true;
             }
-            Send(L.CmdClose, [L.EpColor]);
+            try
+            {
+                for (int pos = 0; pos < frame.Length; pos += L.MaxChunk)
+                {
+                    var chunk = frame.AsSpan(pos, Math.Min(L.MaxChunk, frame.Length - pos));
+                    Send(pos == 0 ? L.CmdWriteColor : L.CmdWriteColorNext, chunk);
+                }
+            }
+            catch { _colorOpen = false; throw; }
+            if (_needSoftwareMode) _colorOpen = false; // the hub left software mode; reopen after re-entering it
             _sending.CopyTo(_sent, 0);
             _sentValid = true;
             _sinceSend.Restart();
@@ -233,6 +252,7 @@ public sealed class LinkHubDevice : IRgbDevice, IFanDevice
     {
         if (!_needSoftwareMode) return;
         _needSoftwareMode = false;
+        _colorOpen = false;
         Send(L.CmdSoftwareMode);
         _sentValid = false; // the hub shows its stored lighting again until it gets a full frame
     }

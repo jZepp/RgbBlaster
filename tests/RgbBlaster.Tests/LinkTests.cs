@@ -219,12 +219,41 @@ public class LinkHubDeviceTests
     public void FlushResendsUnchangedFrameAfterKeepAlive()
     {
         var hw = Hub();
-        var dev = new LinkHubDevice(hw) { KeepAlive = TimeSpan.Zero };
+        var dev = new LinkHubDevice(hw) { KeepAlive = TimeSpan.Zero, MinFrameInterval = TimeSpan.Zero };
         dev.Open();
         dev.Flush();
         hw.Writes.Clear();
         dev.Flush();
         Assert.Single(hw.Commands(L.CmdWriteColor));
+    }
+
+    [Fact]
+    public void ColorEndpointOpensOnceAcrossFrames()
+    {
+        var hw = Hub();
+        var dev = new LinkHubDevice(hw) { MinFrameInterval = TimeSpan.Zero };
+        dev.Open();
+        hw.Writes.Clear();
+        for (int i = 0; i < 3; i++)
+        {
+            dev.SetZone(0, [new Rgb((byte)(i + 1), 0, 0)]);
+            dev.Flush();
+        }
+        Assert.Equal(3, hw.Commands(L.CmdWriteColor).Count());
+        Assert.Single(hw.Commands(L.CmdOpenColor));
+    }
+
+    [Fact]
+    public void ChangedFrameWaitsForMinimumInterval()
+    {
+        var hw = Hub();
+        var dev = new LinkHubDevice(hw) { MinFrameInterval = TimeSpan.FromHours(1) };
+        dev.Open();
+        dev.Flush();
+        hw.Writes.Clear();
+        dev.SetZone(0, [new Rgb(9, 9, 9)]);
+        dev.Flush();
+        Assert.Empty(hw.Commands(L.CmdWriteColor));
     }
 
     [Fact]
