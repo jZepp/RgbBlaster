@@ -248,12 +248,14 @@ public sealed class LcdDashboard : IDisposable
     {
         float a = angleDeg * MathF.PI / 180;
         float ux = MathF.Cos(a), uy = MathF.Sin(a), px = -uy, py = ux;
-        halfWidth *= 1.6f;
+        halfWidth *= 2.5f;
+        float tip = halfWidth * 0.3f; // flat tip, so the needle stays thick along its length
         PointF[] needle =
         [
-            new(Cx + ux * length, Cy + uy * length),
+            new(Cx + ux * length + px * tip, Cy + uy * length + py * tip),
             new(Cx + px * halfWidth - ux * 24, Cy + py * halfWidth - uy * 24),
             new(Cx - px * halfWidth - ux * 24, Cy - py * halfWidth - uy * 24),
+            new(Cx + ux * length - px * tip, Cy + uy * length - py * tip),
         ];
         // Glow: round-edged strokes in the needle's own colour, widest and faintest first.
         foreach (var (width, alpha) in new[] { (22f, 22), (15f, 38), (9f, 60), (5f, 90) })
