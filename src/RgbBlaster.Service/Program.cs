@@ -97,7 +97,12 @@ api.MapPost("/profiles/{name}/activate", (string name) => Guard(() => { rt().Act
 api.MapDelete("/profiles/{name}", (string name) => Guard(() => { rt().DeleteProfile(name); return Results.NoContent(); }));
 
 api.MapGet("/lcd/frame", () => rt().LcdFrame() is { } f ? Results.Bytes(f, "image/jpeg") : Results.NoContent());
-api.MapGet("/lcd/screens", () => RgbBlaster.Drivers.Lcd.LcdDashboard.Screens.Select(s => new { id = s.Id, name = s.Name, animated = s.FrameMs < 1000, lighting = s.UsesLighting }));
+api.MapGet("/lcd/screens", () => RgbBlaster.Drivers.Lcd.LcdDashboard.Screens.Select(s => new
+{
+    id = s.Id, name = s.Name, animated = s.FrameMs < 1000, lighting = s.UsesLighting,
+    slots = RgbBlaster.Drivers.Lcd.LcdDashboard.DefaultSlots.GetValueOrDefault(s.Id) ?? [],
+}));
+api.MapGet("/lcd/metrics", () => RgbBlaster.Drivers.Lcd.LcdDashboard.Metrics.Select(m => new { id = m.Id, name = m.Name }));
 api.MapGet("/lcd/screens/{id}/preview", (string id) => Guard(() => Results.Bytes(rt().ScreenPreview(id), "image/jpeg")));
 api.MapPut("/lcd", (LcdSettings s) => Guard(() => { rt().SetLcd(s); return Results.NoContent(); }));
 api.MapGet("/lcd/media", () => rt().MediaList());

@@ -41,6 +41,20 @@ public sealed class HardwareMonitorSession : ITemperatureSource, IDisposable
         return s.Value is float v && v > 0 ? v : null;
     }
 
+    /// <summary>Load in percent: "cpu" (CPU Total) or "gpu" (discrete GPU core). Null when there is no such sensor.</summary>
+    public float? ReadLoad(string which)
+    {
+        bool cpu = which.Equals("cpu", StringComparison.OrdinalIgnoreCase);
+        var loads = AllHardware()
+            .Where(h => cpu ? h.HardwareType == HardwareType.Cpu : h.HardwareType is HardwareType.GpuNvidia or HardwareType.GpuAmd or HardwareType.GpuIntel)
+            .OrderBy(h => h.HardwareType == HardwareType.GpuNvidia ? 0 : 1)
+            .SelectMany(h => h.Sensors).Where(s => s.SensorType == SensorType.Load).ToList();
+        var s = loads.FirstOrDefault(s => s.Name.Equals(cpu ? "CPU Total" : "GPU Core", StringComparison.OrdinalIgnoreCase)) ?? loads.FirstOrDefault();
+        if (s is null) return null;
+        s.Hardware.Update();
+        return s.Value is float v && v >= 0 ? v : null;
+    }
+
     /// <summary>Every temperature sensor with its identifier, for choosing curve sensors.</summary>
     public IEnumerable<(string Id, string Hardware, string Name, float? Value)> Temperatures()
     {

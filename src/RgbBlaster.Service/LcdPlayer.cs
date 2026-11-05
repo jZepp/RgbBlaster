@@ -15,7 +15,7 @@ public sealed class LcdPlayer : IDisposable
     private const byte DefaultBrightness = 100, DefaultRotation = 0;
 
     private readonly Func<LinkLcdDevice?>? _open;
-    private readonly Func<(float? Cpu, float? Gpu, int? Pump)> _values;
+    private readonly Func<LcdValues> _values;
     private readonly Action<string> _note;
     private readonly Thread _thread;
     private readonly AutoResetEvent _wake = new(false);
@@ -30,7 +30,7 @@ public sealed class LcdPlayer : IDisposable
     private readonly Func<LcdBackground?> _background;
 
     /// <param name="background">Lighting canvas for the lighting screens; called only while one is shown.</param>
-    public LcdPlayer(Func<LinkLcdDevice?>? open, Func<(float? Cpu, float? Gpu, int? Pump)> values, Action<string> note,
+    public LcdPlayer(Func<LinkLcdDevice?>? open, Func<LcdValues> values, Action<string> note,
         Func<LcdBackground?>? background = null)
     {
         _background = background ?? (() => null);
@@ -50,6 +50,14 @@ public sealed class LcdPlayer : IDisposable
 
     private volatile LcdBackgroundStyle _style = LcdBackgroundStyle.Off;
     public void SetBackground(LcdBackgroundStyle style) { _style = style; _wake.Set(); }
+
+    private volatile IReadOnlyDictionary<string, List<string>> _data = new Dictionary<string, List<string>>();
+    /// <summary>Chosen metric ids per screen; see <see cref="LcdDashboard.DefaultSlots"/>.</summary>
+    public void SetData(IReadOnlyDictionary<string, List<string>> data) { _data = data; _wake.Set(); }
+
+    private volatile bool _overlay;
+    /// <summary>True draws the temperatures over media frames.</summary>
+    public void SetOverlay(bool on) { _overlay = on; _wake.Set(); }
 
     /// <summary>Null shows the built-in screen.</summary>
     public void Show(IReadOnlyList<LcdFrame>? frames)
@@ -112,11 +120,10 @@ public sealed class LcdPlayer : IDisposable
             byte[] jpeg;
             if (playing is null)
             {
-                var (cpu, gpu, pump) = _values();
                 var screen = _screen;
                 var style = _style;
                 var bg = LcdDashboard.NeedsBackground(screen, style) ? _background() : null;
-                jpeg = dash.Render(screen, new LcdValues(cpu, gpu, pump), bg, style);
+                jpeg = dash.Render(screen, _values(), bg, style, _data.GetValueOrDefault(screen));
                 delay = Math.Max(LcdDashboard.FrameMs(screen, style), _minFrameMs);
             }
             else
@@ -127,6 +134,11 @@ public sealed class LcdPlayer : IDisposable
                 delay = playing.Count == 1 ? 1000 : f.DelayMs;
                 // Skip frames that would come too soon, so the animation keeps its speed at the lower rate.
                 while (playing.Count > 1 && delay < _minFrameMs) { delay += Math.Max(1, playing[index % playing.Count].DelayMs); index++; }
+                if (_overlay)
+                {
+                    try { jpeg = dash.Overlay(jpeg, _values()); }
+                    catch (Exception ex) { Fault("overlay", ex); }
+                }
             }
             LastFrame = jpeg;
 

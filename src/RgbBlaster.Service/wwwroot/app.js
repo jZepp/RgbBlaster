@@ -778,6 +778,25 @@ const lcd = {
     }
     box.replaceChildren(...kids);
   },
+  // Data shown in each slot of the selected screen, or the overlay switch for media.
+  async dataControls() {
+    const c = this.cfg, box = $('#lcd-data');
+    if (c.mode === 'media') {
+      box.replaceChildren(h('label', { class: 'field-row' }, 'Show temperatures over the media',
+        h('input', { type: 'checkbox', checked: !!c.mediaOverlay, onchange: e => { c.mediaOverlay = e.target.checked; this.push(); } })));
+      return;
+    }
+    if (c.mode !== 'dashboard') { box.replaceChildren(); return; }
+    const [screens, metrics] = await Promise.all([this.screens ??= api.get('/api/lcd/screens'), this.metrics ??= api.get('/api/lcd/metrics')]);
+    const id = c.screen ?? 'status', sc = screens.find(s => s.id === id);
+    if (!sc?.slots.length) { box.replaceChildren(); return; }
+    c.data ??= {};
+    const chosen = sc.slots.map((d, i) => c.data[id]?.[i] ?? d);
+    box.replaceChildren(h('div', { class: 'field' }, 'Data shown', ...chosen.map((m, i) =>
+      h('label', { class: 'field-row' }, i === 0 ? 'Main' : `Slot ${i + 1}`,
+        h('select', { onchange: e => { chosen[i] = e.target.value; c.data[id] = [...chosen]; this.push(); } },
+          ...metrics.map(x => h('option', { value: x.id, selected: x.id === m }, x.name)))))));
+  },
   push: debounce(function () { act(api.send('PUT', '/api/lcd', lcd.cfg)).then(loadSettings); }, 150),
   controls() {
     const b = $('#lcd-bright');
@@ -790,6 +809,7 @@ const lcd = {
     $('#lcd-fps-val').textContent = fpsText(this.cfg.maxFps);
     f.oninput = () => { this.cfg.maxFps = +f.value; $('#lcd-fps-val').textContent = fpsText(f.value); this.push(); };
     this.backgroundControls();
+    this.dataControls();
     for (const btn of $$('#lcd-rot button')) {
       btn.classList.toggle('on', +btn.dataset.r === this.cfg.rotation);
       btn.onclick = () => { this.cfg.rotation = +btn.dataset.r; this.controls(); this.push(); };

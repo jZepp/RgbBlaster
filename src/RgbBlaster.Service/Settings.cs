@@ -60,7 +60,17 @@ public sealed class LcdSettings
     /// </summary>
     public float MaxFps { get; set; } = 2;
 
-    public LcdSettings Clone() => (LcdSettings)MemberwiseClone();
+    /// <summary>Chosen metric ids for each screen's data slots, by screen id. Missing entries use the screen's defaults.</summary>
+    public Dictionary<string, List<string>> Data { get; set; } = [];
+    /// <summary>Media mode: draws the temperatures over the media.</summary>
+    public bool MediaOverlay { get; set; }
+
+    public LcdSettings Clone()
+    {
+        var c = (LcdSettings)MemberwiseClone();
+        c.Data = Data.ToDictionary(kv => kv.Key, kv => kv.Value.ToList());
+        return c;
+    }
     public byte Brightness { get; set; } = 100;
     public byte Rotation { get; set; }
 }

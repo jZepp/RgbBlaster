@@ -111,6 +111,17 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
             catch (Exception ex) { Note($"LINK poll: {ex.Message}"); }
         }
         float? cpu = _temps?.ReadCelsius("cpu"), gpu = _temps?.ReadCelsius("gpu");
+        float? cpuLoad = null, gpuLoad = null, liquid = null;
+        try
+        {
+            if (_temps is Simulation.Temps sim) { cpuLoad = sim.ReadLoad("cpu"); gpuLoad = sim.ReadLoad("gpu"); liquid = 30 + (cpu ?? 50) / 10; }
+            else if (_hm is not null) { cpuLoad = _hm.ReadLoad("cpu"); gpuLoad = _hm.ReadLoad("gpu"); }
+        }
+        catch (Exception ex) { Note($"Load sensors: {ex.Message}"); }
+        // Liquid temperature: the AIO reports it as the temperature of its own LINK channel.
+        foreach (var h in _hubs)
+            foreach (var f in h.Fans.Where(f => f.IsPump))
+                if (liquid is null && int.TryParse(f.Id.AsSpan(2), out int ch) && ch < h.Temperatures.Count) liquid = h.Temperatures[ch];
         var fans = _fans.Select(f => new FanInfo(f.Id, f.Name, f.IsPump, SafeRpm(f))).ToList();
         IReadOnlyList<FanCurveState> curves;
         lock (_gate) curves = _fanCtl?.States() ?? [];
@@ -126,7 +137,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
             _history.Enqueue(point);
             while (_history.Count > HistorySeconds) _history.Dequeue();
         }
-        _status = new StatusSnapshot(cpu, gpu, fans, curves, _loop?.LastRenderMs ?? 0);
+        _status = new StatusSnapshot(cpu, gpu, fans, curves, _loop?.LastRenderMs ?? 0, liquid, cpuLoad, gpuLoad);
     }
 
     private static int? SafeRpm(IFanChannel f)
@@ -134,10 +145,12 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
         try { return f.ReadRpm(); } catch { return null; }
     }
 
-    private (float?, float?, int?) LcdReadings()
+    private LcdValues LcdReadings()
     {
         var s = _status;
-        return (s.Cpu, s.Gpu, s.Fans.FirstOrDefault(f => f.IsPump)?.Rpm);
+        List<(float? Cpu, float? Gpu)> history;
+        lock (_history) history = _history.Select(p => (p.Cpu, p.Gpu)).ToList();
+        return new LcdValues(s.Cpu, s.Gpu, s.Fans.FirstOrDefault(f => f.IsPump)?.Rpm, s.Liquid, s.CpuLoad, s.GpuLoad, history);
     }
 
     private void Shutdown()
@@ -220,6 +233,9 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
                 activeProfile = _settings.ActiveProfile,
                 cpu = s.Cpu,
                 gpu = s.Gpu,
+                liquid = s.Liquid,
+                cpuLoad = s.CpuLoad,
+                gpuLoad = s.GpuLoad,
                 renderMs = s.RenderMs,
                 fans = s.Fans,
                 curves = s.Curves,
@@ -256,10 +272,10 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
     public byte[] ScreenPreview(string id)
     {
         if (!LcdDashboard.Screens.Any(s => s.Id == id)) throw new KeyNotFoundException(id);
-        var (cpu, gpu, pump) = LcdReadings();
         using var dash = new LcdDashboard();
         var style = Style(ActiveProfileUnlocked().Lcd);
-        return dash.Render(id, new LcdValues(cpu, gpu, pump), LcdDashboard.NeedsBackground(id, style) ? LcdBackgroundFrame() : null, style);
+        var lcd = ActiveProfileUnlocked().Lcd;
+        return dash.Render(id, LcdReadings(), LcdDashboard.NeedsBackground(id, style) ? LcdBackgroundFrame() : null, style, lcd.Data.GetValueOrDefault(id));
     }
 
     // Area of the canvas shown behind the lighting screens, as x0, y0, x1, y1 (0..1). Updated when the layout or LCD settings change.
@@ -408,6 +424,8 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
         UpdateLcdAreaUnlocked(lcd);
         _lcd.HandBack(lcd.Mode == "device");
         _lcd.SetBackground(Style(lcd));
+        _lcd.SetData(lcd.Data.ToDictionary(kv => kv.Key, kv => kv.Value.ToList()));
+        _lcd.SetOverlay(lcd.MediaOverlay);
         _lcd.ShowScreen(lcd.Screen);
         _lcd.Show(frames);
     }
@@ -510,7 +528,8 @@ public sealed record FanInfo(string Id, string Name, bool IsPump, int? Rpm);
 public sealed record SensorInfo(string Id, string Hardware, string Name, float? Value);
 public sealed record HistoryPoint(long T, float? Cpu, float? Gpu, Dictionary<string, int?> Duty);
 
-internal sealed record StatusSnapshot(float? Cpu, float? Gpu, IReadOnlyList<FanInfo> Fans, IReadOnlyList<FanCurveState> Curves, double RenderMs)
+internal sealed record StatusSnapshot(float? Cpu, float? Gpu, IReadOnlyList<FanInfo> Fans, IReadOnlyList<FanCurveState> Curves, double RenderMs,
+    float? Liquid = null, float? CpuLoad = null, float? GpuLoad = null)
 {
     public static readonly StatusSnapshot Empty = new(null, null, [], [], 0);
 }

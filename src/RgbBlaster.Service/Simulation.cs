@@ -47,6 +47,12 @@ public static class Simulation
     public sealed class Temps : ITemperatureSource
     {
         private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
+        public float? ReadLoad(string which)
+        {
+            double t = _clock.Elapsed.TotalSeconds;
+            return which == "cpu" ? (float)(35 + 25 * Math.Sin(t / 17)) : (float)(20 + 15 * Math.Sin(t / 23 + 2));
+        }
+
         public float? ReadCelsius(string sensor)
         {
             double t = _clock.Elapsed.TotalSeconds;
