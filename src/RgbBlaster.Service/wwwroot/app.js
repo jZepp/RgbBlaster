@@ -251,7 +251,8 @@ const arrow = a => ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'][Math
 // ---------- Layout editor ----------
 const VW = 1000, VH = 625;
 const layout = {
-  work: null, sel: null, drag: null,
+  // sel is the zone shown in the editor; group holds every selected zone (keys). Dragging one moves the whole group.
+  work: null, sel: null, group: new Set(), drag: null,
   visible: () => !$('#page-layout').hidden,
   enter() {
     this.work = structuredClone(state.settings.layout);
@@ -293,13 +294,21 @@ const layout = {
   },
   shape(p) {
     const g = s('g');
-    const sel = this.sel && this.key(p.device, p.zone) === this.sel;
+    const k = this.key(p.device, p.zone);
+    const sel = this.group.has(k);
     const name = state.leds.find(z => this.key(z.device, z.zone) === this.key(p.device, p.zone))?.name ?? p.zone;
     const startDrag = (e, mode) => {
       e.stopPropagation();
-      this.select(p.device, p.zone);
+      if (e.ctrlKey || e.shiftKey) { this.toggle(p.device, p.zone); return; }
+      // The map is redrawn on every press, so a native dblclick never reaches the same element.
+      const now = performance.now(), dbl = this.lastPress?.k === k && now - this.lastPress.t < 400;
+      this.lastPress = { k, t: now };
+      if (dbl && mode === 'move') { this.selectDevice(p.device); }
+      else if (mode !== 'move' || !this.group.has(k)) this.select(p.device, p.zone);
+      else { this.sel = k; this.editor(); var collapse = true; }
       const pt = this.toSvg(e);
-      this.drag = { p, mode, x0: pt.x, y0: pt.y, orig: structuredClone(p) };
+      const members = mode === 'move' ? this.work.filter(q => this.group.has(this.key(q.device, q.zone))) : [p];
+      this.drag = { p, mode, x0: pt.x, y0: pt.y, orig: structuredClone(p), members: members.map(q => ({ q, o: structuredClone(q) })), moved: false, collapse: !!collapse };
       $('#layout-svg').setPointerCapture(e.pointerId);
     };
     if (p.shape === 'Ring') {
@@ -349,10 +358,23 @@ const layout = {
     const { p, mode, x0, y0, orig } = this.drag;
     const pt = this.toSvg(e);
     const dx = (pt.x - x0) / VW, dy = (pt.y - y0) / VH;
+    if (!this.drag.moved && Math.hypot(pt.x - x0, pt.y - y0) < 3) return;
+    this.drag.moved = true;
+    this.lastPress = null; // a drag is not the first half of a double-click
     const cl = v => Math.min(1, Math.max(0, +v.toFixed(3)));
     if (mode === 'move') {
-      p.x = cl(orig.x + dx); p.y = cl(orig.y + dy);
-      if (p.shape !== 'Ring') { p.x2 = cl(orig.x2 + dx); p.y2 = cl(orig.y2 + dy); }
+      // Clamp the shift so the whole group stays on the map and keeps its shape.
+      let lo = -Infinity, hi = Infinity, loY = -Infinity, hiY = Infinity;
+      for (const { q, o } of this.drag.members) {
+        const xs = q.shape === 'Ring' ? [o.x] : [o.x, o.x2], ys = q.shape === 'Ring' ? [o.y] : [o.y, o.y2];
+        lo = Math.max(lo, -Math.min(...xs)); hi = Math.min(hi, 1 - Math.max(...xs));
+        loY = Math.max(loY, -Math.min(...ys)); hiY = Math.min(hiY, 1 - Math.max(...ys));
+      }
+      const mx = Math.min(hi, Math.max(lo, dx)), my = Math.min(hiY, Math.max(loY, dy));
+      for (const { q, o } of this.drag.members) {
+        q.x = cl(o.x + mx); q.y = cl(o.y + my);
+        if (q.shape !== 'Ring') { q.x2 = cl(o.x2 + mx); q.y2 = cl(o.y2 + my); }
+      }
     } else if (mode === 'radius') {
       p.radius = Math.max(0.01, +Math.abs(pt.x / VW - p.x).toFixed(3));
     } else {
@@ -362,18 +384,44 @@ const layout = {
     this.refreshPoints();
     this.editor();
   },
-  select(d, z) { this.sel = this.key(d, z); this.draw(); this.list(); this.editor(); },
+  refresh() { this.draw(); this.list(); this.editor(); },
+  select(d, z) { this.sel = this.key(d, z); this.group = new Set([this.sel]); this.refresh(); },
+  toggle(d, z) {
+    const k = this.key(d, z);
+    if (this.group.has(k)) { this.group.delete(k); if (this.sel === k) this.sel = [...this.group][0] ?? null; }
+    else { this.group.add(k); this.sel = k; }
+    this.refresh();
+  },
+  selectDevice(device) {
+    const keys = state.leds.filter(z => z.device === device).map(z => this.key(z.device, z.zone));
+    this.group = new Set(keys);
+    this.sel = keys[0] ?? null;
+    this.refresh();
+  },
   list() {
-    $('#zone-list').replaceChildren(...state.leds.map(z => {
-      const placed = this.find(z.device, z.zone);
-      return h('div', { class: 'zone-item' + (this.sel === this.key(z.device, z.zone) ? ' sel' : ''), onclick: () => this.select(z.device, z.zone) },
-        h('div', {}, h('div', {}, z.name), h('small', {}, `${z.device} · ${z.zone} · ${z.points.length || '?'} LEDs`)),
-        placed ? h('small', {}, placed.shape) : h('span', { class: 'unplaced' }, 'not placed'));
+    const devices = [...new Set(state.leds.map(z => z.device))];
+    $('#zone-list').replaceChildren(...devices.flatMap(dev => {
+      const zones = state.leds.filter(z => z.device === dev);
+      const all = zones.every(z => this.group.has(this.key(z.device, z.zone)));
+      const head = h('div', { class: 'zone-group' + (all && this.group.size > 1 ? ' sel' : ''), title: 'Select every zone of this device, to move them together', onclick: () => this.selectDevice(dev) },
+        h('span', {}, dev), h('small', {}, `${zones.length} zone${zones.length === 1 ? '' : 's'} · select all`));
+      return [head, ...zones.map(z => {
+        const k = this.key(z.device, z.zone);
+        const placed = this.find(z.device, z.zone);
+        return h('div', { class: 'zone-item' + (this.group.has(k) ? ' sel' : ''), onclick: e => (e.ctrlKey || e.shiftKey) ? this.toggle(z.device, z.zone) : this.select(z.device, z.zone) },
+          h('div', {}, h('div', {}, z.name), h('small', {}, `${z.zone} · ${z.points.length || '?'} LEDs`)),
+          placed ? h('small', {}, placed.shape) : h('span', { class: 'unplaced' }, 'not placed'));
+      })];
     }));
   },
   editor() {
     const box = $('#zone-edit');
     if (!this.sel) { box.replaceChildren(h('p', { class: 'muted' }, 'Select a zone.')); return; }
+    if (this.group.size > 1) {
+      const placed = this.work.filter(q => this.group.has(this.key(q.device, q.zone))).length;
+      box.replaceChildren(h('p', { class: 'muted' }, `${this.group.size} zones selected (${placed} placed). Drag any of them to move the group. Click one zone to edit it alone.`));
+      return;
+    }
     const [d, z] = this.sel.split('/');
     const info = state.leds.find(x => this.key(x.device, x.zone) === this.sel);
     let p = this.find(d, z);
@@ -392,13 +440,18 @@ const layout = {
       ? [num('x', 'Centre X'), num('y', 'Centre Y'), num('radius', 'Radius'), num('fans', 'Fans in a row', 1), num('fanDx', 'Fan spacing X'), num('fanDy', 'Fan spacing Y')]
       : [num('x', 'Start X'), num('y', 'Start Y'), num('x2', 'End X'), num('y2', 'End Y')];
     box.replaceChildren(
-      h('div', { class: 'card-head' }, h('h2', {}, info?.name ?? z), h('button', { class: 'btn small danger', onclick: () => { this.work = this.work.filter(x => x !== p); this.draw(); this.list(); this.editor(); this.refreshPoints(); } }, 'Remove')),
+      h('div', { class: 'card-head' }, h('h2', {}, info?.name ?? z), h('button', { class: 'btn small danger', onclick: () => { this.work = this.work.filter(x => x !== p); this.refresh(); this.refreshPoints(); } }, 'Remove')),
       h('label', { class: 'field' }, 'Shape', shapeSel),
       h('div', { class: 'curve-meta' }, ...fields));
   },
 };
 $('#layout-svg').addEventListener('pointermove', e => layout.move(e));
-$('#layout-svg').addEventListener('pointerup', () => (layout.drag = null));
+$('#layout-svg').addEventListener('pointerup', () => {
+  const d = layout.drag;
+  layout.drag = null;
+  // A click without a drag on a member of a group edits that zone alone.
+  if (d && !d.moved && d.collapse) layout.select(d.p.device, d.p.zone);
+});
 $('#layout-revert').onclick = () => { layout.enter(); toast('Layout reverted.'); };
 $('#layout-save').onclick = async () => {
   await act(api.send('PUT', '/api/layout', layout.work), 'Layout saved.');
