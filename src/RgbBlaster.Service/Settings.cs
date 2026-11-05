@@ -42,6 +42,8 @@ public sealed class LcdSettings
     public string? Media { get; set; }
     /// <summary>Built-in screen id when Mode is "dashboard".</summary>
     public string Screen { get; set; } = "status";
+    /// <summary>Lighting screens: "case" shows the whole case map, "pump" the area around the pump zone.</summary>
+    public string BackgroundArea { get; set; } = "case";
     public byte Brightness { get; set; } = 100;
     public byte Rotation { get; set; }
 }

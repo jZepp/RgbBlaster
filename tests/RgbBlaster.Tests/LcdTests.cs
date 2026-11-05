@@ -74,13 +74,29 @@ public class LinkLcdTests
     {
         if (!OperatingSystem.IsWindowsVersionAtLeast(6, 1)) return;
         using var dash = new LcdDashboard();
-        foreach (var (id, _, _) in LcdDashboard.Screens)
+        var bg = new LcdBackground(Enumerable.Range(0, 8 * 8 * 3).Select(i => (byte)(i * 5)).ToArray(), 8, 8);
+        foreach (var (id, _, _, _) in LcdDashboard.Screens)
             foreach (var v in new[] { new LcdValues(61.4f, 48f, 2400), new LcdValues(null, null, null), new LcdValues(140, -5, 9000) })
             {
-                var frame = dash.Render(id, v);
+                var frame = dash.Render(id, v, v.CpuC is null ? null : bg);
                 Assert.True(frame.Length < P.MaxChunk * 255, id);
                 using var img = System.Drawing.Image.FromStream(new MemoryStream(frame));
                 Assert.Equal((P.Width, P.Height), (img.Width, img.Height));
             }
+    }
+
+    [Fact]
+    public void LightingScreenShowsTheBackgroundColors()
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(6, 1)) return;
+        using var dash = new LcdDashboard();
+        // Left half pure red, right half pure blue.
+        var rgb = new byte[4 * 4 * 3];
+        for (int y = 0; y < 4; y++) for (int x = 0; x < 4; x++) { int o = (y * 4 + x) * 3; if (x < 2) rgb[o] = 255; else rgb[o + 2] = 255; }
+        var frame = dash.Render("lighting", default, new LcdBackground(rgb, 4, 4));
+        using var img = new System.Drawing.Bitmap(new MemoryStream(frame));
+        var left = img.GetPixel(60, 240); var right = img.GetPixel(420, 240);
+        Assert.True(left.R > 200 && left.B < 60, $"left {left}");
+        Assert.True(right.B > 200 && right.R < 60, $"right {right}");
     }
 }

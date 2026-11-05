@@ -642,6 +642,12 @@ const lcd = {
     b.value = this.cfg.brightness;
     $('#lcd-bright-val').textContent = `${this.cfg.brightness}%`;
     b.oninput = () => { this.cfg.brightness = +b.value; $('#lcd-bright-val').textContent = `${b.value}%`; this.push(); };
+    const lighting = this.cfg.mode !== 'media' && (this.cfg.screen ?? '').startsWith('lighting');
+    $('#lcd-area-field').hidden = !lighting;
+    for (const btn of $$('#lcd-area button')) {
+      btn.classList.toggle('on', btn.dataset.a === (this.cfg.backgroundArea ?? 'case'));
+      btn.onclick = () => { this.cfg.backgroundArea = btn.dataset.a; this.controls(); this.push(); };
+    }
     for (const btn of $$('#lcd-rot button')) {
       btn.classList.toggle('on', +btn.dataset.r === this.cfg.rotation);
       btn.onclick = () => { this.cfg.rotation = +btn.dataset.r; this.controls(); this.push(); };
@@ -649,7 +655,7 @@ const lcd = {
   },
   async gallery() {
     const [media, screens] = await Promise.all([api.get('/api/lcd/media'), this.screens ??= api.get('/api/lcd/screens')]);
-    const pick = (mode, id, screen) => { this.cfg.mode = mode; this.cfg.media = id; if (screen) this.cfg.screen = screen; this.gallery(); this.push(); };
+    const pick = (mode, id, screen) => { this.cfg.mode = mode; this.cfg.media = id; if (screen) this.cfg.screen = screen; this.gallery(); this.controls(); this.push(); };
     const builtIn = screens.map(sc => h('div', { class: 'tile' + (this.cfg.mode !== 'media' && (this.cfg.screen ?? 'status') === sc.id ? ' on' : ''), title: sc.name, onclick: () => pick('dashboard', null, sc.id) },
       h('img', { src: `/api/lcd/screens/${sc.id}/preview?t=${Date.now()}`, alt: sc.name }),
       h('span', { class: 'tag' }, sc.name)));

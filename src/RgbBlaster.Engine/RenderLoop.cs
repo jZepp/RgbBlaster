@@ -50,16 +50,21 @@ public sealed class RenderLoop : IDisposable
     /// Downsampled copy of the current canvas as packed RGB bytes, row by row, for previews.
     /// Reads the canvas while the render thread may be writing it; a preview can mix two frames.
     /// </summary>
-    public byte[] Preview(int width, int height)
+    public byte[] Preview(int width, int height) => PreviewRegion(0, 0, 1, 1, width, height);
+
+    /// <summary>Like <see cref="Preview"/>, for the canvas area x0..x1, y0..y1 (0..1).</summary>
+    public byte[] PreviewRegion(float x0, float y0, float x1, float y1, int width, int height)
     {
+        int cw = _canvas.Width, ch = _canvas.Height;
         var src = _canvas.Pixels;
         var dst = new byte[width * height * 3];
         for (int y = 0; y < height; y++)
         {
-            int sy = Math.Min(_canvas.Height - 1, y * _canvas.Height / height);
+            int sy = Math.Clamp((int)((y0 + (y1 - y0) * (y + 0.5f) / height) * ch), 0, ch - 1);
             for (int x = 0; x < width; x++)
             {
-                var c = src[sy * _canvas.Width + Math.Min(_canvas.Width - 1, x * _canvas.Width / width)];
+                int sx = Math.Clamp((int)((x0 + (x1 - x0) * (x + 0.5f) / width) * cw), 0, cw - 1);
+                var c = src[sy * cw + sx];
                 int o = (y * width + x) * 3;
                 dst[o] = c.R; dst[o + 1] = c.G; dst[o + 2] = c.B;
             }

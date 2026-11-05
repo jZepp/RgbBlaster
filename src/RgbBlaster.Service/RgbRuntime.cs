@@ -74,7 +74,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
             _devices = Simulation.Devices(_settings.Layout);
             _temps = new Simulation.Temps();
             _fans = Simulation.Fans(_settings.Profiles.SelectMany(p => p.FanCurves).SelectMany(c => c.Fans));
-            _lcd = new LcdPlayer(null, LcdReadings, Note);
+            _lcd = new LcdPlayer(null, LcdReadings, Note, LcdBackgroundFrame);
             Note("Simulation: no hardware is touched.");
         }
         else
@@ -87,7 +87,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
             if (config.BoardFans.Count > 0 && _board is null) Note("Board fans: no Super I/O access (PawnIO and administrator rights needed). They stay on the BIOS curve.");
             _temps = _hm;
             _fans = _hubs.SelectMany(h => h.Fans).Concat(_board?.Fans ?? []).ToList();
-            _lcd = new LcdPlayer(() => LinkLcdDevice.Discover().FirstOrDefault(), LcdReadings, Note);
+            _lcd = new LcdPlayer(() => LinkLcdDevice.Discover().FirstOrDefault(), LcdReadings, Note, LcdBackgroundFrame);
         }
 
         _fanCtl = BuildFanController(profile.FanCurves);
@@ -258,7 +258,42 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
         if (!LcdDashboard.Screens.Any(s => s.Id == id)) throw new KeyNotFoundException(id);
         var (cpu, gpu, pump) = LcdReadings();
         using var dash = new LcdDashboard();
-        return dash.Render(id, new LcdValues(cpu, gpu, pump));
+        return dash.Render(id, new LcdValues(cpu, gpu, pump), LcdDashboard.UsesLighting(id) ? LcdBackgroundFrame() : null);
+    }
+
+    // Area of the canvas shown behind the lighting screens, as x0, y0, x1, y1 (0..1). Updated when the layout or LCD settings change.
+    private volatile float[] _lcdArea = [0, 0, 1, 1];
+
+    /// <summary>
+    /// "pump": a square around the first placed ring whose name mentions the pump or LCD, a little larger than the ring,
+    /// so the screen shows the colors passing over the pump. Anything else, or no such ring: the whole case.
+    /// </summary>
+    private void UpdateLcdAreaUnlocked(LcdSettings lcd)
+    {
+        float[] area = [0, 0, 1, 1];
+        if (lcd.BackgroundArea == "pump")
+        {
+            var pump = _devices.SelectMany(d => d.Zones.Select(z => (d, z)))
+                .Where(t => t.z.Name.Contains("pump", StringComparison.OrdinalIgnoreCase) || t.z.Name.Contains("LCD", StringComparison.OrdinalIgnoreCase))
+                .Select(t => _settings.Layout.FirstOrDefault(p => p.Shape == PlacementShape.Ring
+                    && p.Device.Equals(t.d.Id, StringComparison.OrdinalIgnoreCase) && p.Zone.Equals(t.z.Id, StringComparison.OrdinalIgnoreCase)))
+                .FirstOrDefault(p => p is not null);
+            if (pump is not null)
+            {
+                float r = Math.Max(0.02f, pump.Radius * 1.3f);
+                area = [pump.X - r, pump.Y - r, pump.X + r, pump.Y + r];
+            }
+        }
+        _lcdArea = area;
+    }
+
+    private LcdBackground? LcdBackgroundFrame()
+    {
+        var loop = _loop;
+        if (loop is null) return null;
+        var a = _lcdArea;
+        const int n = LcdDashboard.BackgroundSize;
+        return new LcdBackground(loop.PreviewRegion(a[0], a[1], a[2], a[3], n, n), n, n);
     }
 
     /// <summary>Canvas positions (0..1) of every LED, per placed zone, for the layout editor.</summary>
@@ -339,6 +374,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
             _loop?.Dispose();
             _loop = new RenderLoop(LoopConfig(), _devices, effect);
             _loop.Start();
+            UpdateLcdAreaUnlocked(ActiveProfileUnlocked().Lcd);
             store.Save(_settings);
         }
     }
@@ -364,6 +400,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
             frames = LoadMedia(id);
             if (frames is null) Note($"LCD: media '{id}' not found; showing the status screen.");
         }
+        UpdateLcdAreaUnlocked(lcd);
         _lcd.ShowScreen(lcd.Screen);
         _lcd.Show(frames);
     }
@@ -426,7 +463,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
                 Name = name,
                 Effect = cur.Effect.Clone(),
                 FanCurves = System.Text.Json.JsonSerializer.Deserialize<List<FanCurveConfig>>(System.Text.Json.JsonSerializer.Serialize(cur.FanCurves))!,
-                Lcd = new LcdSettings { Mode = cur.Lcd.Mode, Media = cur.Lcd.Media, Screen = cur.Lcd.Screen, Brightness = cur.Lcd.Brightness, Rotation = cur.Lcd.Rotation },
+                Lcd = new LcdSettings { Mode = cur.Lcd.Mode, Media = cur.Lcd.Media, Screen = cur.Lcd.Screen, BackgroundArea = cur.Lcd.BackgroundArea, Brightness = cur.Lcd.Brightness, Rotation = cur.Lcd.Rotation },
                 Keyboard = cur.Keyboard.Clone(),
             };
             _settings.Profiles.RemoveAll(p => p.Name == name);

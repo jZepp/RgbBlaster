@@ -26,8 +26,13 @@ public sealed class LcdPlayer : IDisposable
     private LinkLcdDevice? _device;
 
     /// <param name="open">Opens the device; null runs without hardware.</param>
-    public LcdPlayer(Func<LinkLcdDevice?>? open, Func<(float? Cpu, float? Gpu, int? Pump)> values, Action<string> note)
+    private readonly Func<LcdBackground?> _background;
+
+    /// <param name="background">Lighting canvas for the lighting screens; called only while one is shown.</param>
+    public LcdPlayer(Func<LinkLcdDevice?>? open, Func<(float? Cpu, float? Gpu, int? Pump)> values, Action<string> note,
+        Func<LcdBackground?>? background = null)
     {
+        _background = background ?? (() => null);
         _open = open;
         _values = values;
         _note = note;
@@ -84,8 +89,9 @@ public sealed class LcdPlayer : IDisposable
             {
                 var (cpu, gpu, pump) = _values();
                 var screen = _screen;
-                jpeg = dash.Render(screen, new LcdValues(cpu, gpu, pump));
-                delay = LcdDashboard.IsAnimated(screen) ? LcdDashboard.AnimatedFrameMs : 1000;
+                var bg = LcdDashboard.UsesLighting(screen) ? _background() : null;
+                jpeg = dash.Render(screen, new LcdValues(cpu, gpu, pump), bg);
+                delay = LcdDashboard.FrameMs(screen);
             }
             else
             {

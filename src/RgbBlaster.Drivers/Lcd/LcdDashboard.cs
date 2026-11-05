@@ -10,6 +10,9 @@ namespace RgbBlaster.Drivers.Lcd;
 /// <summary>Live values for the built-in screens. Null means not available.</summary>
 public readonly record struct LcdValues(float? CpuC, float? GpuC, int? PumpRpm);
 
+/// <summary>Packed RGB pixels, row by row, used as a screen background.</summary>
+public sealed record LcdBackground(byte[] Rgb, int Width, int Height);
+
 /// <summary>
 /// Renders the built-in LCD screens as 480x480 JPEG frames. Not thread-safe: use one instance per thread.
 /// Animated screens ease their needles toward new values, so they are rendered several times per second.
@@ -17,16 +20,19 @@ public readonly record struct LcdValues(float? CpuC, float? GpuC, int? PumpRpm);
 [SupportedOSPlatform("windows")]
 public sealed class LcdDashboard : IDisposable
 {
-    public static readonly IReadOnlyList<(string Id, string Name, bool Animated)> Screens =
+    /// <summary>Built-in screens and the interval between their frames. Lighting screens need a background.</summary>
+    public static readonly IReadOnlyList<(string Id, string Name, int FrameMs, bool UsesLighting)> Screens =
     [
-        ("status", "Status", false),
-        ("speedometer", "Speedometer", true),
-        ("rings", "Rings", true),
-        ("clock", "Clock", false),
+        ("status", "Status", 1000, false),
+        ("speedometer", "Speedometer", 100, false),
+        ("rings", "Rings", 100, false),
+        ("clock", "Clock", 1000, false),
+        ("lighting", "Lighting", 66, true),
+        ("lighting-status", "Lighting + status", 66, true),
     ];
 
-    /// <summary>Frame interval for animated screens.</summary>
-    public const int AnimatedFrameMs = 100;
+    /// <summary>Background size requested for lighting screens; the screen scales it up smoothly.</summary>
+    public const int BackgroundSize = 64;
 
     private const float Cx = P.Width / 2f, Cy = P.Height / 2f;
     private const string Face = "Bahnschrift";
@@ -56,13 +62,14 @@ public sealed class LcdDashboard : IDisposable
     public float RedLine { get; set; } = 85;
     public int PumpMaxRpm { get; set; } = 3200;
 
-    public static bool IsAnimated(string screen) => Screens.Any(s => s.Id == screen && s.Animated);
+    public static int FrameMs(string screen) => Screens.FirstOrDefault(s => s.Id == screen).FrameMs is > 0 and var ms ? ms : 1000;
+    public static bool UsesLighting(string screen) => Screens.Any(s => s.Id == screen && s.UsesLighting);
 
     /// <summary>The original status screen.</summary>
     public byte[] Render(float? cpuC, float? gpuC, int? pumpRpm) => Render("status", new LcdValues(cpuC, gpuC, pumpRpm));
 
-    /// <summary>Unknown screen ids show the status screen.</summary>
-    public byte[] Render(string screen, LcdValues v)
+    /// <summary>Unknown screen ids show the status screen. <paramref name="background"/> is used by lighting screens.</summary>
+    public byte[] Render(string screen, LcdValues v, LcdBackground? background = null)
     {
         double now = _clockSw.Elapsed.TotalSeconds;
         float dt = (float)Math.Clamp(now - _lastFrame, 0, 1);
@@ -81,6 +88,8 @@ public sealed class LcdDashboard : IDisposable
                 case "speedometer": Speedometer(g, v); break;
                 case "rings": Rings(g, v); break;
                 case "clock": Clock(g, v); break;
+                case "lighting": Background(g, background); break;
+                case "lighting-status": Background(g, background); LightingStatus(g, v); break;
                 default: Status(g, v); break;
             }
         }
@@ -209,6 +218,47 @@ public sealed class LcdDashboard : IDisposable
         g.DrawString(now.ToString("dddd d MMMM"), _clockSmall, Brushes.Gray, new RectangleF(0, Cy + 38, P.Width, 40), _center);
         g.DrawString($"CPU {(v.CpuC is float c ? $"{c:F0}°" : "--")}   GPU {(v.GpuC is float gt ? $"{gt:F0}°" : "--")}", _clockSmall, Brushes.LightGray,
             new RectangleF(0, Cy + 100, P.Width, 40), _center);
+    }
+
+    /// <summary>Scales the background to fill the screen with bilinear smoothing.</summary>
+    private static void Background(Graphics g, LcdBackground? bg)
+    {
+        if (bg is null || bg.Width < 1 || bg.Height < 1 || bg.Rgb.Length < bg.Width * bg.Height * 3) return;
+        using var src = new Bitmap(bg.Width, bg.Height, PixelFormat.Format24bppRgb);
+        var data = src.LockBits(new Rectangle(0, 0, bg.Width, bg.Height), ImageLockMode.WriteOnly, PixelFormat.Format24bppRgb);
+        try
+        {
+            var row = new byte[data.Stride];
+            for (int y = 0; y < bg.Height; y++)
+            {
+                for (int x = 0; x < bg.Width; x++)
+                {
+                    int i = (y * bg.Width + x) * 3;
+                    row[x * 3] = bg.Rgb[i + 2];      // GDI+ stores 24-bit pixels as B, G, R
+                    row[x * 3 + 1] = bg.Rgb[i + 1];
+                    row[x * 3 + 2] = bg.Rgb[i];
+                }
+                System.Runtime.InteropServices.Marshal.Copy(row, 0, data.Scan0 + y * data.Stride, data.Stride);
+            }
+        }
+        finally { src.UnlockBits(data); }
+        var state = g.Save();
+        g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+        g.PixelOffsetMode = PixelOffsetMode.Half;
+        using var attrs = new ImageAttributes();
+        attrs.SetWrapMode(WrapMode.TileFlipXY);   // no dark fringe at the edges
+        g.DrawImage(src, new Rectangle(0, 0, P.Width, P.Height), 0, 0, bg.Width, bg.Height, GraphicsUnit.Pixel, attrs);
+        g.Restore(state);
+    }
+
+    /// <summary>Temperatures on a dark disc over the lighting background.</summary>
+    private void LightingStatus(Graphics g, LcdValues v)
+    {
+        using (var disc = new SolidBrush(Color.FromArgb(170, 0, 0, 0))) g.FillEllipse(disc, Cx - 150, Cy - 150, 300, 300);
+        g.DrawString("CPU", _unit, Brushes.LightGray, new RectangleF(0, Cy - 100, P.Width, 30), _center);
+        g.DrawString(v.CpuC is float c ? $"{c:F0}°" : "--", _readout, Brushes.White, new RectangleF(0, Cy - 72, P.Width, 80), _center);
+        g.DrawString($"GPU {(v.GpuC is float gt ? $"{gt:F0}°" : "--")}", _clockSmall, Brushes.White, new RectangleF(0, Cy + 14, P.Width, 40), _center);
+        g.DrawString($"{(v.PumpRpm?.ToString() ?? "--")} rpm", _unit, Brushes.LightGray, new RectangleF(0, Cy + 58, P.Width, 30), _center);
     }
 
     private float Temp01(float t) => float.IsNaN(t) ? 0 : Math.Clamp((t - GaugeMin) / (GaugeMax - GaugeMin), 0, 1);
