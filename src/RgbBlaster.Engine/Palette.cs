@@ -32,6 +32,22 @@ public sealed class Palette
         return Blend(_colors[i], _colors[(i + 1) % n], Smooth(p - i));
     }
 
+    /// <summary>
+    /// Like <see cref="Loop"/>, but each color is a band that fades in and out with darkness between bands.
+    /// <paramref name="spacing"/> is the dark share of each band's slot, 0..0.95. Zero gives <see cref="Loop"/>.
+    /// </summary>
+    public Rgb Bands(float u, float spacing)
+    {
+        if (spacing <= 0) return Loop(u);
+        int n = _colors.Length;
+        float p = (u - MathF.Floor(u)) * n;
+        int i = Math.Min((int)p, n - 1);
+        float lit = 1 - Math.Clamp(spacing, 0f, 0.95f);
+        float f = p - i;
+        if (f >= lit) return Rgb.Black;
+        return _colors[i].Scale(MathF.Sin(MathF.PI * f / lit));
+    }
+
     /// <summary>Position u from 0 (first color) to 1 (last color), clamped. For gradients that do not loop.</summary>
     public Rgb Span(float u)
     {

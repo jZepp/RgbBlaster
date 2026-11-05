@@ -48,7 +48,8 @@ public sealed class BreathingEffect(Palette colors, float periodSeconds = 4f) : 
 /// Bands of the palette colors that travel across the canvas in any direction. Uses canvas geometry, so the layout decides
 /// which lights see a band first.
 /// </summary>
-public sealed class WaveEffect(Palette colors, float speedHz, float angleDegrees, float wavelengths) : IEffect
+/// <param name="spacing">Dark share of each color band, 0..0.95. See <see cref="Palette.Bands"/>.</param>
+public sealed class WaveEffect(Palette colors, float speedHz, float angleDegrees, float wavelengths, float spacing = 0) : IEffect
 {
     public WaveEffect(Rgb a, Rgb b, float speedHz, float angleDegrees, float wavelengths) : this(Palette.Of(a, b), speedHz, angleDegrees, wavelengths) { }
 
@@ -65,7 +66,7 @@ public sealed class WaveEffect(Palette colors, float speedHz, float angleDegrees
         {
             var row = canvas.Row(y);
             for (int x = 0; x < canvas.Width; x++)
-                row[x] = colors.Loop((x / w * dx + y / h * dy) * wavelengths - phase);
+                row[x] = colors.Bands((x / w * dx + y / h * dy) * wavelengths - phase, spacing);
         }
     }
 }
@@ -92,7 +93,7 @@ public sealed class GradientEffect(Palette colors, float angleDegrees) : IEffect
 }
 
 /// <summary>Rings of the palette colors that grow out of a centre point.</summary>
-public sealed class RadialEffect(Palette colors, float speedHz, float rings, float cx, float cy) : IEffect
+public sealed class RadialEffect(Palette colors, float speedHz, float rings, float cx, float cy, float spacing = 0) : IEffect
 {
     public string Name => "radial";
     public NativeEffect Native => new(NativeEffectKind.Wave, colors[0], speedHz > 0 ? 1f / speedHz : 0, Random: colors.Count > 2);
@@ -107,7 +108,7 @@ public sealed class RadialEffect(Palette colors, float speedHz, float rings, flo
             for (int x = 0; x < canvas.Width; x++)
             {
                 float ddx = x / w - cx, ddy = y / h - cy;
-                row[x] = colors.Loop(MathF.Sqrt(ddx * ddx + ddy * ddy) * rings - phase);
+                row[x] = colors.Bands(MathF.Sqrt(ddx * ddx + ddy * ddy) * rings - phase, spacing);
             }
         }
     }
@@ -204,6 +205,74 @@ public sealed class MatrixEffect : IEffect
                     canvas.Row(y).Slice(x0, cw).Fill(px);
             }
         }
+    }
+}
+
+/// <summary>
+/// Flames that rise from the bottom of the canvas. A coarse heat grid: the bottom row is fed random heat, and each
+/// step every cell takes the heat of a cell below it, shifted sideways at random, minus some cooling. Heat maps to the
+/// palette from coolest to hottest color; low heat fades to black.
+/// </summary>
+public sealed class FireEffect : IEffect
+{
+    private const int CellPx = 4;
+    private const float StepsPerSecondAtDefault = 30f;
+    private readonly Palette _colors;
+    private readonly float _stepsPerSecond, _height;
+    private readonly Random _rng = new(4321);
+    private float[] _heat = [];
+    private int _gw, _gh;
+    private double _pending, _last = double.NaN;
+
+    /// <param name="speedHz">Flicker rate; the default 0.2 gives 30 simulation steps per second.</param>
+    /// <param name="height">Flame height as a share of the canvas, 0.05..1.</param>
+    public FireEffect(Palette colors, float speedHz, float height)
+    {
+        _colors = colors;
+        _stepsPerSecond = StepsPerSecondAtDefault * Math.Clamp(speedHz / 0.2f, 0.3f, 3f);
+        _height = Math.Clamp(height, 0.05f, 1f);
+    }
+
+    public string Name => "fire";
+    public NativeEffect Native => new(NativeEffectKind.Sparkle, _colors[Math.Max(0, _colors.Count / 2)]);
+
+    public void Render(Canvas canvas, double t)
+    {
+        int gw = Math.Max(2, canvas.Width / CellPx), gh = Math.Max(2, canvas.Height / CellPx);
+        if (gw != _gw || gh != _gh) { _gw = gw; _gh = gh; _heat = new float[gw * gh]; _last = double.NaN; }
+        if (double.IsNaN(_last)) { _last = t; for (int i = 0; i < 60; i++) Step(); }
+        _pending += Math.Clamp(t - _last, 0, 0.5) * _stepsPerSecond;
+        _last = t;
+        for (; _pending >= 1; _pending--) Step();
+
+        for (int y = 0; y < canvas.Height; y++)
+        {
+            var row = canvas.Row(y);
+            int gy = Math.Min(gh - 1, y / CellPx);
+            for (int x = 0; x < canvas.Width; x++)
+            {
+                float h = _heat[gy * gw + Math.Min(gw - 1, x / CellPx)];
+                row[x] = h <= 0.02f ? Rgb.Black : _colors.Span(h).Scale(Math.Min(1f, h * 2.5f));
+            }
+        }
+    }
+
+    private void Step()
+    {
+        int gw = _gw, gh = _gh;
+        // Fuel: the bottom row flickers between strong and full heat, with occasional gaps that split the flames.
+        int bottom = (gh - 1) * gw;
+        for (int x = 0; x < gw; x++)
+            _heat[bottom + x] = _rng.NextSingle() < 0.25f ? 0.15f : 0.8f + 0.2f * _rng.NextSingle();
+        // Cooling per row so that the tallest flames reach about `height` of the canvas.
+        float cool = 0.85f / (gh * _height);
+        for (int y = 0; y < gh - 1; y++)
+            for (int x = 0; x < gw; x++)
+            {
+                int sx = Math.Clamp(x + _rng.Next(-1, 2), 0, gw - 1);
+                float h = _heat[(y + 1) * gw + sx] - cool * _rng.NextSingle() * 2;
+                _heat[y * gw + x] = h < 0 ? 0 : h;
+            }
     }
 }
 

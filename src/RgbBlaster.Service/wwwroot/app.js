@@ -201,18 +201,19 @@ const EFFECT_INFO = {
   solid: { label: 'Solid', params: ['color'] },
   breathe: { label: 'Breathe', params: ['palette', 'speed'] },
   rainbow: { label: 'Rainbow', params: ['speed', 'scale'] },
-  wave: { label: 'Wave', params: ['palette', 'speed', 'angle', 'scale'] },
-  radial: { label: 'Ripple', params: ['palette', 'speed', 'scale', 'center'] },
+  wave: { label: 'Wave', params: ['palette', 'speed', 'angle', 'scale', 'spacing'] },
+  radial: { label: 'Ripple', params: ['palette', 'speed', 'scale', 'spacing', 'center'] },
   cycle: { label: 'Color cycle', params: ['palette', 'speed'] },
   gradient: { label: 'Gradient', params: ['palette', 'angle'] },
   matrix: { label: 'Matrix', params: ['palette', 'speed', 'density'] },
+  fire: { label: 'Fire', params: ['palette', 'speed', 'height'], palette: 'Fire' },
 };
 const MAX_COLORS = 16;
 const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
 const PALETTES = {
   Rainbow: ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff'],
   Ocean: ['#00a0ff', '#00ffd0', '#0030ff', '#00e0ff'],
-  Fire: ['#ff2000', '#ff8000', '#ffd000', '#ff4000'],
+  Fire: ['#8a0000', '#ff2000', '#ff8000', '#ffd000', '#fff4c0'],
   Synthwave: ['#ff00a0', '#a000ff', '#00d0ff'],
   Matrix: ['#00ff40', '#00c030', '#80ff80'],
   Ice: ['#ffffff', '#80e0ff', '#2080ff'],
@@ -254,7 +255,13 @@ const lighting = {
     const grid = $('#effect-grid');
     grid.replaceChildren(...state.effects.map(t => h('div', {
       class: `effect fx-${t}${t === this.spec.type ? ' on' : ''}`,
-      onclick: () => { this.spec.type = t; this.render(); this.push(this.spec); },
+      onclick: () => {
+        this.spec.type = t;
+        // Fire looks wrong with arbitrary colors; start it on the fire palette.
+        const preset = EFFECT_INFO[t]?.palette;
+        if (preset) this.spec.colors = [...PALETTES[preset]];
+        this.render(); this.push(this.spec);
+      },
     }, h('span', {}, EFFECT_INFO[t]?.label ?? t))));
     const p = $('#effect-params');
     const want = new Set([...(EFFECT_INFO[this.spec.type]?.params ?? []), 'brightness']);
@@ -271,6 +278,8 @@ const lighting = {
     }
     if (want.has('palette')) kids.push(this.paletteEditor(set));
     if (want.has('speed')) kids.push(slider('speed', 'Speed', 0.02, 2, 0.02, v => `${(1 / v).toFixed(1)} s per cycle`));
+    if (want.has('spacing')) kids.push(slider('spacing', 'Spacing (dark between bands)', 0, 0.95, 0.05, v => v > 0 ? `${Math.round(v * 100)}% dark` : 'none'));
+    if (want.has('height')) kids.push(slider('height', 'Flame height', 0.1, 1, 0.05, v => `${Math.round(v * 100)}% of the case`));
     if (want.has('density')) kids.push(slider('density', 'Density', 0.05, 1, 0.05, v => `${Math.round(v * 100)}% of columns`));
     if (want.has('angle')) kids.push(slider('angle', 'Direction', 0, 359, 1, v => `${Math.round(v)}° ${arrow(v)}`));
     if (want.has('scale')) kids.push(slider('scale', 'Repeats across the case', 0.25, 6, 0.25, v => `× ${(+v).toFixed(2)}`));
@@ -340,11 +349,12 @@ const layout = {
   drawDots() {
     this.dots.replaceChildren();
     this.dotEls = [];
-    for (const z of this.points) for (const [x, y] of z.points) {
-      const c = s('circle', { cx: x * VW, cy: y * VH, r: 6, class: 'led', fill: '#888' });
+    // LED 1 of each zone is drawn larger with a ring, to match the editor to the hardware.
+    for (const z of this.points) z.points.forEach(([x, y], i) => {
+      const c = s('circle', { cx: x * VW, cy: y * VH, r: i === 0 ? 9 : 6, class: i === 0 ? 'led first' : 'led', fill: '#888' });
       this.dots.append(c);
       this.dotEls.push({ el: c, x, y });
-    }
+    });
   },
   shape(p) {
     const g = s('g');
@@ -473,7 +483,12 @@ const layout = {
     if (!this.sel) { box.replaceChildren(h('p', { class: 'muted' }, 'Select a zone.')); return; }
     if (this.group.size > 1) {
       const placed = this.work.filter(q => this.group.has(this.key(q.device, q.zone))).length;
-      box.replaceChildren(h('p', { class: 'muted' }, `${this.group.size} zones selected (${placed} placed). Drag any of them to move the group. Click one zone to edit it alone.`));
+      const members = this.work.filter(q => this.group.has(this.key(q.device, q.zone)));
+      const turn = deg => { for (const q of members) q.rotation = (((q.rotation ?? 0) + deg + 540) % 360) - 180; this.draw(); this.refreshPoints(); };
+      box.replaceChildren(
+        h('p', { class: 'muted' }, `${this.group.size} zones selected (${placed} placed). Drag any of them to move the group. Click one zone to edit it alone.`),
+        h('div', { class: 'field' }, 'Turn LEDs of every selected zone', h('div', { class: 'seg' },
+          ...[[-15, '↺ 15°'], [-5, '↺ 5°'], [5, '↻ 5°'], [15, '↻ 15°']].map(([d, t]) => h('button', { onclick: () => turn(d) }, t)))));
       return;
     }
     const [d, z] = this.sel.split('/');
@@ -490,9 +505,19 @@ const layout = {
       h('input', { type: 'number', step, value: p[key] ?? 0, onchange: e => { p[key] = +e.target.value; this.draw(); this.refreshPoints(); } }));
     const shapeSel = h('select', { onchange: e => { p.shape = e.target.value; if (p.shape !== 'Ring' && !p.x2) { p.x2 = Math.min(1, p.x + 0.1); p.y2 = p.y; } this.draw(); this.editor(); this.refreshPoints(); } },
       ...['Ring', 'Line', 'Grid'].map(v => h('option', { value: v, selected: p.shape === v }, v)));
+    const rot = label => {
+      const val = h('span', { class: 'val' }, `${Math.round(p.rotation ?? 0)}°`);
+      return h('label', { class: 'field wide' }, label, val, h('input', { type: 'range', min: -180, max: 180, step: 1, value: p.rotation ?? 0,
+        oninput: e => { p.rotation = +e.target.value; val.textContent = `${e.target.value}°`; this.draw(); this.refreshPoints(); } }));
+    };
+    const rev = label => h('label', { class: 'field-row' }, label, h('input', { type: 'checkbox', checked: !!p.reverse,
+      onchange: e => { p.reverse = e.target.checked; this.refreshPoints(); } }));
     const fields = p.shape === 'Ring'
-      ? [num('x', 'Centre X'), num('y', 'Centre Y'), num('radius', 'Radius'), num('fans', 'Fans in a row', 1), num('fanDx', 'Fan spacing X'), num('fanDy', 'Fan spacing Y')]
-      : [num('x', 'Start X'), num('y', 'Start Y'), num('x2', 'End X'), num('y2', 'End Y')];
+      ? [num('x', 'Centre X'), num('y', 'Centre Y'), num('radius', 'Radius'), num('fans', 'Fans in a row', 1), num('fanDx', 'Fan spacing X'), num('fanDy', 'Fan spacing Y'),
+         rot('LED 1 position (0° = top)'), rev('Counter-clockwise')]
+      : p.shape === 'Grid'
+        ? [num('x', 'Start X'), num('y', 'Start Y'), num('x2', 'End X'), num('y2', 'End Y'), rot('Rotation')]
+        : [num('x', 'Start X'), num('y', 'Start Y'), num('x2', 'End X'), num('y2', 'End Y'), rev('LED 1 at the end')];
     box.replaceChildren(
       h('div', { class: 'card-head' }, h('h2', {}, info?.name ?? z), h('button', { class: 'btn small danger', onclick: () => { this.work = this.work.filter(x => x !== p); this.refresh(); this.refreshPoints(); } }, 'Remove')),
       h('label', { class: 'field' }, 'Shape', shapeSel),

@@ -5,7 +5,7 @@ namespace RgbBlaster.Engine;
 /// <summary>Builds effects from <see cref="EffectSpec"/>. Unknown types fall back to the rainbow wave.</summary>
 public static class EffectFactory
 {
-    public static readonly IReadOnlyList<string> Types = ["solid", "breathe", "rainbow", "wave", "radial", "cycle", "gradient", "matrix"];
+    public static readonly IReadOnlyList<string> Types = ["solid", "breathe", "rainbow", "wave", "radial", "cycle", "gradient", "matrix", "fire"];
     public const int MaxColors = 16;
 
     public static IEffect Create(EffectSpec s)
@@ -17,12 +17,13 @@ public static class EffectFactory
         {
             "solid" => new SolidEffect(palette[0]),
             "breathe" => new BreathingEffect(palette, 1f / speed),
-            "wave" => new WaveEffect(palette, speed, s.Angle, scale),
-            "radial" => new RadialEffect(palette, speed, scale, s.CenterX, s.CenterY),
+            "wave" => new WaveEffect(palette, speed, s.Angle, scale, s.Spacing),
+            "radial" => new RadialEffect(palette, speed, scale, s.CenterX, s.CenterY, s.Spacing),
             // Settings saved before palettes existed cycle the full hue wheel.
             "cycle" => s.Colors.Count > 0 ? new ColorCycleEffect(palette, speed) : new ColorCycleEffect(speed),
             "gradient" => new GradientEffect(palette, s.Angle),
             "matrix" => new MatrixEffect(palette, speed, s.Density),
+            "fire" => new FireEffect(palette, speed, s.Height),
             _ => new RainbowWaveEffect(speed, scale),
         };
         float b = Math.Clamp(s.Brightness, 0f, 1f);

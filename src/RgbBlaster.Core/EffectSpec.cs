@@ -2,7 +2,7 @@ namespace RgbBlaster.Core;
 
 /// <summary>
 /// An effect as data, so profiles can store it and the web GUI can edit it. Unused fields are ignored by each type.
-/// Types: solid, breathe, rainbow, wave, radial, cycle, gradient, matrix.
+/// Types: solid, breathe, rainbow, wave, radial, cycle, gradient, matrix, fire.
 /// </summary>
 public sealed class EffectSpec
 {
@@ -24,6 +24,10 @@ public sealed class EffectSpec
     public float CenterY { get; set; } = 0.5f;
     /// <summary>Matrix: share of columns falling at one time, 0..1.</summary>
     public float Density { get; set; } = 0.4f;
+    /// <summary>Wave and radial: dark share of each color band, 0..0.95.</summary>
+    public float Spacing { get; set; }
+    /// <summary>Fire: flame height as a share of the canvas, 0.05..1.</summary>
+    public float Height { get; set; } = 0.6f;
 
     /// <summary>The palette, falling back to Color and Color2.</summary>
     public IReadOnlyList<string> PaletteOrDefault() => Colors.Count > 0 ? Colors : [Color, Color2];

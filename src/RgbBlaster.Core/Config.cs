@@ -141,4 +141,9 @@ public sealed class ZonePlacement
     // Line and Grid (Grid: X,Y is the top-left corner, X2,Y2 the bottom-right).
     public float X2 { get; set; }
     public float Y2 { get; set; }
+
+    /// <summary>Degrees, clockwise. Ring: where LED 1 sits, 0 = 12 o'clock. Grid: turns the grid about its centre.</summary>
+    public float Rotation { get; set; }
+    /// <summary>Ring: LEDs run counter-clockwise. Line: LED 1 is at the X2,Y2 end.</summary>
+    public bool Reverse { get; set; }
 }

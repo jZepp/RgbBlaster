@@ -15,6 +15,7 @@ public class EffectFactoryTests
     [InlineData("cycle", "cycle")]
     [InlineData("gradient", "gradient")]
     [InlineData("matrix", "matrix")]
+    [InlineData("fire", "fire")]
     [InlineData("no-such-effect", "rainbow")]
     public void CreatesEachType(string type, string name) =>
         Assert.Equal(name, EffectFactory.Create(new EffectSpec { Type = type }).Name);
@@ -59,6 +60,60 @@ public class EffectFactoryTests
         Assert.Contains(c.Pixels, p => p.G > 0);
         Assert.DoesNotContain(c.Pixels, p => p.R > p.G);            // tails stay green; only heads blend toward white
         Assert.Equal(NativeEffectKind.Sparkle, e.Native.Kind);
+    }
+
+    [Fact]
+    public void SpacingLeavesDarkGapsBetweenBands()
+    {
+        var p = Palette.Of(new Rgb(0, 0, 255));
+        Assert.Equal(new Rgb(0, 0, 255), p.Bands(0.25f, 0.5f));   // middle of the lit half
+        Assert.Equal(Rgb.Black, p.Bands(0.75f, 0.5f));            // dark half
+        Assert.Equal(p.Loop(0.3f), p.Bands(0.3f, 0));             // no spacing: same as before
+    }
+
+    [Fact]
+    public void FireIsHotAtTheBottomAndDarkAtTheTop()
+    {
+        var c = new Canvas(160, 100);
+        var e = EffectFactory.Create(new EffectSpec { Type = "fire", Colors = ["#800000", "#FF8000", "#FFFF80"], Height = 0.5f });
+        for (int i = 0; i <= 30; i++) e.Render(c, i / 30.0);
+        static int Sum(Rgb p) => p.R + p.G + p.B;
+        long bottom = 0, top = 0;
+        for (int x = 0; x < c.Width; x++) { bottom += Sum(c.Pixels[(c.Height - 2) * c.Width + x]); top += Sum(c.Pixels[x]); }
+        Assert.True(bottom > top * 4 && bottom > 0, $"bottom {bottom}, top {top}");
+        Assert.DoesNotContain(c.Pixels, p => p.B > p.R);           // stays within the warm palette
+    }
+
+    [Fact]
+    public void RingRotationMovesLedOneAndReverseRunsCounterClockwise()
+    {
+        const int w = 100, h = 100;
+        (int X, int Y) At(int i) => (i % w, i / w);
+        var ring = new ZonePlacement { Shape = PlacementShape.Ring, X = 0.5f, Y = 0.5f, Radius = 0.4f };
+        var plain = LayoutMapper.Map(ring, 4, w, h);
+        Assert.True(At(plain[0]).Y < 20);                     // LED 1 at the top
+        Assert.True(At(plain[1]).X > 80);                     // then clockwise: right
+        ring.Rotation = 90;
+        Assert.True(At(LayoutMapper.Map(ring, 4, w, h)[0]).X > 80);   // LED 1 now at 3 o'clock
+        ring.Rotation = 0; ring.Reverse = true;
+        Assert.True(At(LayoutMapper.Map(ring, 4, w, h)[1]).X < 20);   // counter-clockwise: left
+    }
+
+    [Fact]
+    public void LineReverseStartsAtTheOtherEnd()
+    {
+        var line = new ZonePlacement { Shape = PlacementShape.Line, X = 0, Y = 0.5f, X2 = 1, Y2 = 0.5f, Reverse = true };
+        var idx = LayoutMapper.Map(line, 5, 100, 10);
+        Assert.True(idx[0] % 100 > idx[4] % 100);
+    }
+
+    [Fact]
+    public void GridRotationTurnsAboutTheCentre()
+    {
+        var grid = new ZonePlacement { Shape = PlacementShape.Grid, X = 0.25f, Y = 0.25f, X2 = 0.75f, Y2 = 0.75f, Rotation = 180 };
+        var idx = LayoutMapper.Map(grid, 2, 100, 100, [(0f, 0f), (1f, 1f)]);
+        Assert.True(idx[0] % 100 >= 70 && idx[0] / 100 >= 70);   // top-left corner turned to bottom-right
+        Assert.True(idx[1] % 100 <= 30 && idx[1] / 100 <= 30);
     }
 
     [Fact]
