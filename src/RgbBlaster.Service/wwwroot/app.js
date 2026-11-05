@@ -636,18 +636,40 @@ const lcd = {
     $('#lcd-live').src = `/api/lcd/frame?t=${Date.now()}`;
     $('#lcd-present').textContent = st.lcd.present ? (st.lcd.error ? `Error: ${st.lcd.error}` : 'Connected') : (st.simulated ? 'Preview only' : 'No LCD found');
   },
+  // Lighting behind the built-in screens. Shown only while a built-in screen is selected.
+  backgroundControls() {
+    const c = this.cfg, box = $('#lcd-bg');
+    if (c.mode !== 'dashboard') { box.replaceChildren(); return; }
+    const plain = (c.screen ?? '').startsWith('lighting');
+    const mode = plain && (c.background ?? 'off') === 'off' ? 'flow' : c.background ?? 'off';
+    const set = (k, v, redraw = true) => { c[k] = v; if (redraw) this.controls(); this.push(); };
+    const seg = (label, key, options) => h('div', { class: 'field' }, label, h('div', { class: 'seg' },
+      ...options.map(([v, t]) => h('button', { class: (key === 'background' ? mode : c[key] ?? options[0][0]) === v ? 'on' : '', onclick: () => set(key, v) }, t))));
+    const slider = (key, label, min, max, step, fmt) => {
+      const val = h('span', { class: 'val' }, fmt(c[key]));
+      return h('label', { class: 'field' }, label, val, h('input', { type: 'range', min, max, step, value: c[key],
+        oninput: e => { val.textContent = fmt(+e.target.value); set(key, +e.target.value, false); } }));
+    };
+    const kids = [];
+    if (plain) kids.push(seg('Lighting', 'background', [['flow', 'Flow'], ['bar', 'Sweeping bar']]));
+    else kids.push(seg('Background', 'background', [['off', 'Off'], ['flow', 'Lighting'], ['bar', 'Sweeping bar']]));
+    if (mode !== 'off') {
+      if (mode === 'bar') kids.push(
+        seg('Bar moves', 'barVertical', [[false, 'Left to right'], [true, 'Top to bottom']]),
+        slider('barSeconds', 'Bar speed', 0.5, 15, 0.5, v => `${(+v).toFixed(1)} s per sweep`),
+        slider('barWidth', 'Bar width', 0.05, 1, 0.05, v => `${Math.round(v * 100)}% of the screen`));
+      if (!plain) kids.push(slider('backgroundDim', 'Dim under the display', 0, 0.9, 0.05, v => `${Math.round(v * 100)}%`));
+      kids.push(seg('Colors from', 'backgroundArea', [['case', 'Whole case'], ['pump', 'Around the pump']]));
+    }
+    box.replaceChildren(...kids);
+  },
   push: debounce(function () { act(api.send('PUT', '/api/lcd', lcd.cfg)).then(loadSettings); }, 150),
   controls() {
     const b = $('#lcd-bright');
     b.value = this.cfg.brightness;
     $('#lcd-bright-val').textContent = `${this.cfg.brightness}%`;
     b.oninput = () => { this.cfg.brightness = +b.value; $('#lcd-bright-val').textContent = `${b.value}%`; this.push(); };
-    const lighting = this.cfg.mode === 'dashboard' && (this.cfg.screen ?? '').startsWith('lighting');
-    $('#lcd-area-field').hidden = !lighting;
-    for (const btn of $$('#lcd-area button')) {
-      btn.classList.toggle('on', btn.dataset.a === (this.cfg.backgroundArea ?? 'case'));
-      btn.onclick = () => { this.cfg.backgroundArea = btn.dataset.a; this.controls(); this.push(); };
-    }
+    this.backgroundControls();
     for (const btn of $$('#lcd-rot button')) {
       btn.classList.toggle('on', +btn.dataset.r === this.cfg.rotation);
       btn.onclick = () => { this.cfg.rotation = +btn.dataset.r; this.controls(); this.push(); };

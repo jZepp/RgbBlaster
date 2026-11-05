@@ -99,4 +99,43 @@ public class LinkLcdTests
         Assert.True(left.R > 200 && left.B < 60, $"left {left}");
         Assert.True(right.B > 200 && right.R < 60, $"right {right}");
     }
+
+    [Fact]
+    public void EveryScreenRendersWithEveryBackgroundStyle()
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(6, 1)) return;
+        using var dash = new LcdDashboard();
+        var bg = new LcdBackground(Enumerable.Repeat((byte)200, 8 * 8 * 3).ToArray(), 8, 8);
+        LcdBackgroundStyle[] styles = [LcdBackgroundStyle.Off, new("flow"), new("bar"), new("bar", Vertical: true, BarWidth: 1), new("bar", BarWidth: 0.05f, PeriodSeconds: 0.3f)];
+        foreach (var (id, _, _, _) in LcdDashboard.Screens)
+            foreach (var style in styles)
+            {
+                var frame = dash.Render(id, new LcdValues(50, 40, 2000), bg, style);
+                using var img = System.Drawing.Image.FromStream(new MemoryStream(frame));
+                Assert.Equal((P.Width, P.Height), (img.Width, img.Height));
+            }
+    }
+
+    [Fact]
+    public void BarShowsABandOfTheBackgroundAndDarkElsewhere()
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(6, 1)) return;
+        using var dash = new LcdDashboard();
+        var white = new LcdBackground(Enumerable.Repeat((byte)255, 4 * 4 * 3).ToArray(), 4, 4);
+        // Sample across the middle row over a few frames: some pixels lit, some dark, whatever the bar position.
+        bool sawLit = false, sawDark = false;
+        for (int f = 0; f < 6 && !(sawLit && sawDark); f++)
+        {
+            var frame = dash.Render("lighting", default, white, new LcdBackgroundStyle("bar", PeriodSeconds: 1, BarWidth: 0.2f));
+            using var img = new System.Drawing.Bitmap(new MemoryStream(frame));
+            for (int x = 0; x < P.Width; x += 8)
+            {
+                var c = img.GetPixel(x, 240);
+                if (c.R > 200) sawLit = true;
+                if (c.R < 30) sawDark = true;
+            }
+            Thread.Sleep(150);
+        }
+        Assert.True(sawLit && sawDark, $"lit {sawLit}, dark {sawDark}");
+    }
 }

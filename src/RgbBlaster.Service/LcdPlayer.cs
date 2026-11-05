@@ -48,6 +48,9 @@ public sealed class LcdPlayer : IDisposable
     /// <summary>Built-in screen shown while no media plays. See <see cref="LcdDashboard.Screens"/>.</summary>
     public void ShowScreen(string id) { _screen = id; _wake.Set(); }
 
+    private volatile LcdBackgroundStyle _style = LcdBackgroundStyle.Off;
+    public void SetBackground(LcdBackgroundStyle style) { _style = style; _wake.Set(); }
+
     /// <summary>Null shows the built-in screen.</summary>
     public void Show(IReadOnlyList<LcdFrame>? frames)
     {
@@ -107,9 +110,10 @@ public sealed class LcdPlayer : IDisposable
             {
                 var (cpu, gpu, pump) = _values();
                 var screen = _screen;
-                var bg = LcdDashboard.UsesLighting(screen) ? _background() : null;
-                jpeg = dash.Render(screen, new LcdValues(cpu, gpu, pump), bg);
-                delay = LcdDashboard.FrameMs(screen);
+                var style = _style;
+                var bg = LcdDashboard.NeedsBackground(screen, style) ? _background() : null;
+                jpeg = dash.Render(screen, new LcdValues(cpu, gpu, pump), bg, style);
+                delay = LcdDashboard.FrameMs(screen, style);
             }
             else
             {

@@ -258,7 +258,8 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
         if (!LcdDashboard.Screens.Any(s => s.Id == id)) throw new KeyNotFoundException(id);
         var (cpu, gpu, pump) = LcdReadings();
         using var dash = new LcdDashboard();
-        return dash.Render(id, new LcdValues(cpu, gpu, pump), LcdDashboard.UsesLighting(id) ? LcdBackgroundFrame() : null);
+        var style = Style(ActiveProfileUnlocked().Lcd);
+        return dash.Render(id, new LcdValues(cpu, gpu, pump), LcdDashboard.NeedsBackground(id, style) ? LcdBackgroundFrame() : null, style);
     }
 
     // Area of the canvas shown behind the lighting screens, as x0, y0, x1, y1 (0..1). Updated when the layout or LCD settings change.
@@ -286,6 +287,9 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
         }
         _lcdArea = area;
     }
+
+    private static LcdBackgroundStyle Style(LcdSettings l) =>
+        new(l.Background, l.BarVertical, Math.Clamp(l.BarSeconds, 0.3f, 60f), Math.Clamp(l.BarWidth, 0.05f, 1f), Math.Clamp(l.BackgroundDim, 0f, 0.9f));
 
     private LcdBackground? LcdBackgroundFrame()
     {
@@ -402,6 +406,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
         }
         UpdateLcdAreaUnlocked(lcd);
         _lcd.HandBack(lcd.Mode == "device");
+        _lcd.SetBackground(Style(lcd));
         _lcd.ShowScreen(lcd.Screen);
         _lcd.Show(frames);
     }
@@ -464,7 +469,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
                 Name = name,
                 Effect = cur.Effect.Clone(),
                 FanCurves = System.Text.Json.JsonSerializer.Deserialize<List<FanCurveConfig>>(System.Text.Json.JsonSerializer.Serialize(cur.FanCurves))!,
-                Lcd = new LcdSettings { Mode = cur.Lcd.Mode, Media = cur.Lcd.Media, Screen = cur.Lcd.Screen, BackgroundArea = cur.Lcd.BackgroundArea, Brightness = cur.Lcd.Brightness, Rotation = cur.Lcd.Rotation },
+                Lcd = cur.Lcd.Clone(),
                 Keyboard = cur.Keyboard.Clone(),
             };
             _settings.Profiles.RemoveAll(p => p.Name == name);

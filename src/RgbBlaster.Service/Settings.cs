@@ -44,6 +44,18 @@ public sealed class LcdSettings
     public string Screen { get; set; } = "status";
     /// <summary>Lighting screens: "case" shows the whole case map, "pump" the area around the pump zone.</summary>
     public string BackgroundArea { get; set; } = "case";
+    /// <summary>Lighting behind the built-in screens: "off", "flow" or "bar".</summary>
+    public string Background { get; set; } = "off";
+    /// <summary>Bar: moves top to bottom instead of left to right.</summary>
+    public bool BarVertical { get; set; }
+    /// <summary>Bar: seconds per sweep.</summary>
+    public float BarSeconds { get; set; } = 3;
+    /// <summary>Bar: width as a share of the screen.</summary>
+    public float BarWidth { get; set; } = 0.3f;
+    /// <summary>Darkening of the background under dials and text, 0..0.9.</summary>
+    public float BackgroundDim { get; set; } = 0.35f;
+
+    public LcdSettings Clone() => (LcdSettings)MemberwiseClone();
     public byte Brightness { get; set; } = 100;
     public byte Rotation { get; set; }
 }
