@@ -5,7 +5,7 @@ namespace RgbBlaster.Core;
 
 public sealed class AppConfig
 {
-    public int FrameRate { get; set; } = 60;
+    public int FrameRate { get; set; } = 30;
     public int CanvasWidth { get; set; } = 320;
     public int CanvasHeight { get; set; } = 200;
     public Fusion2Config Fusion2 { get; set; } = new();
