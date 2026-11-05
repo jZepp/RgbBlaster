@@ -13,10 +13,62 @@ public class EffectFactoryTests
     [InlineData("wave", "wave")]
     [InlineData("radial", "radial")]
     [InlineData("cycle", "cycle")]
-    [InlineData("gradient", "wave")]
+    [InlineData("gradient", "gradient")]
+    [InlineData("matrix", "matrix")]
     [InlineData("no-such-effect", "rainbow")]
     public void CreatesEachType(string type, string name) =>
         Assert.Equal(name, EffectFactory.Create(new EffectSpec { Type = type }).Name);
+
+    [Fact]
+    public void PaletteLoopsThroughEveryColorAndBackToTheFirst()
+    {
+        var p = Palette.Of(new Rgb(255, 0, 0), new Rgb(0, 255, 0), new Rgb(0, 0, 255));
+        Assert.Equal(new Rgb(255, 0, 0), p.Loop(0));
+        Assert.Equal(new Rgb(0, 255, 0), p.Loop(1f / 3));
+        Assert.Equal(new Rgb(0, 0, 255), p.Loop(2f / 3));
+        Assert.Equal(p.Loop(0.1f), p.Loop(1.1f));
+        Assert.Equal(new Rgb(0, 0, 255), p.Span(1));
+    }
+
+    [Fact]
+    public void WaveUsesEveryPaletteColor()
+    {
+        var spec = new EffectSpec { Type = "wave", Colors = ["#FF0000", "#00FF00", "#0000FF", "#FFFFFF"], Speed = 0.01f };
+        var c = new Canvas(400, 4);
+        EffectFactory.Create(spec).Render(c, 0);
+        foreach (var want in new[] { new Rgb(255, 0, 0), new Rgb(0, 255, 0), new Rgb(0, 0, 255), new Rgb(255, 255, 255) })
+            Assert.Contains(want, c.Pixels);
+    }
+
+    [Fact]
+    public void GradientRunsFirstToLastColorEdgeToEdge()
+    {
+        var c = new Canvas(100, 2);
+        new GradientEffect(Palette.Of(Rgb.Black, Rgb.White), 0).Render(c, 0);
+        Assert.True(c.Pixels[0].R < 5);
+        Assert.True(c.Pixels[99].R > 250);
+    }
+
+    [Fact]
+    public void MatrixDropsFallAndUsePaletteColors()
+    {
+        var green = new Rgb(0, 255, 0);
+        var e = new MatrixEffect(Palette.Of(green), 1f, 1f);
+        var c = new Canvas(80, 80);
+        for (int i = 0; i <= 60; i++) e.Render(c, i / 60.0);
+        Assert.Contains(c.Pixels, p => p.G > 0);
+        Assert.DoesNotContain(c.Pixels, p => p.R > p.G);            // tails stay green; only heads blend toward white
+        Assert.Equal(NativeEffectKind.Sparkle, e.Native.Kind);
+    }
+
+    [Fact]
+    public void OldSettingsWithoutPaletteUseColorAndColor2()
+    {
+        var spec = new EffectSpec { Type = "solid", Color = "#102030" };
+        var c = new Canvas(1, 1);
+        EffectFactory.Create(spec).Render(c, 0);
+        Assert.Equal(new Rgb(0x10, 0x20, 0x30), c.Pixels[0]);
+    }
 
     [Fact]
     public void BadColorFallsBackInsteadOfThrowing() =>

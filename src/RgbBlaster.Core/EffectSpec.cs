@@ -2,11 +2,13 @@ namespace RgbBlaster.Core;
 
 /// <summary>
 /// An effect as data, so profiles can store it and the web GUI can edit it. Unused fields are ignored by each type.
-/// Types: solid, breathe, rainbow, wave, radial, cycle, gradient.
+/// Types: solid, breathe, rainbow, wave, radial, cycle, gradient, matrix.
 /// </summary>
 public sealed class EffectSpec
 {
     public string Type { get; set; } = "rainbow";
+    /// <summary>Palette, in order. Empty means Color then Color2 (settings saved before palettes existed).</summary>
+    public List<string> Colors { get; set; } = [];
     public string Color { get; set; } = "#00A0FF";
     public string Color2 { get; set; } = "#FF00A0";
     /// <summary>Cycles per second.</summary>
@@ -20,6 +22,16 @@ public sealed class EffectSpec
     /// <summary>Canvas point for radial effects, 0..1.</summary>
     public float CenterX { get; set; } = 0.5f;
     public float CenterY { get; set; } = 0.5f;
+    /// <summary>Matrix: share of columns falling at one time, 0..1.</summary>
+    public float Density { get; set; } = 0.4f;
 
-    public EffectSpec Clone() => (EffectSpec)MemberwiseClone();
+    /// <summary>The palette, falling back to Color and Color2.</summary>
+    public IReadOnlyList<string> PaletteOrDefault() => Colors.Count > 0 ? Colors : [Color, Color2];
+
+    public EffectSpec Clone()
+    {
+        var c = (EffectSpec)MemberwiseClone();
+        c.Colors = [.. Colors];
+        return c;
+    }
 }

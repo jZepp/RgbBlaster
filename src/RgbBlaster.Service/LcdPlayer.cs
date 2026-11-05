@@ -21,6 +21,7 @@ public sealed class LcdPlayer : IDisposable
     private readonly AutoResetEvent _wake = new(false);
     private volatile bool _running = true;
     private volatile IReadOnlyList<LcdFrame>? _frames;
+    private volatile string _screen = "status";
     private volatile byte _brightness = DefaultBrightness, _rotation = DefaultRotation;
     private LinkLcdDevice? _device;
 
@@ -38,7 +39,10 @@ public sealed class LcdPlayer : IDisposable
     public byte[]? LastFrame { get; private set; }
     public string? LastError { get; private set; }
 
-    /// <summary>Null shows the status screen.</summary>
+    /// <summary>Built-in screen shown while no media plays. See <see cref="LcdDashboard.Screens"/>.</summary>
+    public void ShowScreen(string id) { _screen = id; _wake.Set(); }
+
+    /// <summary>Null shows the built-in screen.</summary>
     public void Show(IReadOnlyList<LcdFrame>? frames)
     {
         _frames = frames is { Count: > 0 } ? frames : null;
@@ -79,8 +83,9 @@ public sealed class LcdPlayer : IDisposable
             if (playing is null)
             {
                 var (cpu, gpu, pump) = _values();
-                jpeg = dash.Render(cpu, gpu, pump);
-                delay = 1000;
+                var screen = _screen;
+                jpeg = dash.Render(screen, new LcdValues(cpu, gpu, pump));
+                delay = LcdDashboard.IsAnimated(screen) ? LcdDashboard.AnimatedFrameMs : 1000;
             }
             else
             {

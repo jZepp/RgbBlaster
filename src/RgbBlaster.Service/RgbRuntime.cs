@@ -74,7 +74,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
             _devices = Simulation.Devices(_settings.Layout);
             _temps = new Simulation.Temps();
             _fans = Simulation.Fans(_settings.Profiles.SelectMany(p => p.FanCurves).SelectMany(c => c.Fans));
-            _lcd = new LcdPlayer(null, LcdValues, Note);
+            _lcd = new LcdPlayer(null, LcdReadings, Note);
             Note("Simulation: no hardware is touched.");
         }
         else
@@ -87,7 +87,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
             if (config.BoardFans.Count > 0 && _board is null) Note("Board fans: no Super I/O access (PawnIO and administrator rights needed). They stay on the BIOS curve.");
             _temps = _hm;
             _fans = _hubs.SelectMany(h => h.Fans).Concat(_board?.Fans ?? []).ToList();
-            _lcd = new LcdPlayer(() => LinkLcdDevice.Discover().FirstOrDefault(), LcdValues, Note);
+            _lcd = new LcdPlayer(() => LinkLcdDevice.Discover().FirstOrDefault(), LcdReadings, Note);
         }
 
         _fanCtl = BuildFanController(profile.FanCurves);
@@ -134,7 +134,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
         try { return f.ReadRpm(); } catch { return null; }
     }
 
-    private (float?, float?, int?) LcdValues()
+    private (float?, float?, int?) LcdReadings()
     {
         var s = _status;
         return (s.Cpu, s.Gpu, s.Fans.FirstOrDefault(f => f.IsPump)?.Rpm);
@@ -252,6 +252,15 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
 
     public byte[]? LcdFrame() => _lcd?.LastFrame;
 
+    /// <summary>One frame of a built-in screen with the current values, for the GUI gallery.</summary>
+    public byte[] ScreenPreview(string id)
+    {
+        if (!LcdDashboard.Screens.Any(s => s.Id == id)) throw new KeyNotFoundException(id);
+        var (cpu, gpu, pump) = LcdReadings();
+        using var dash = new LcdDashboard();
+        return dash.Render(id, new LcdValues(cpu, gpu, pump));
+    }
+
     /// <summary>Canvas positions (0..1) of every LED, per placed zone, for the layout editor.</summary>
     public object LedPoints(List<ZonePlacement>? layout = null)
     {
@@ -355,6 +364,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
             frames = LoadMedia(id);
             if (frames is null) Note($"LCD: media '{id}' not found; showing the status screen.");
         }
+        _lcd.ShowScreen(lcd.Screen);
         _lcd.Show(frames);
     }
 
@@ -416,7 +426,7 @@ public sealed class RgbRuntime(AppConfig config, SettingsStore store, bool simul
                 Name = name,
                 Effect = cur.Effect.Clone(),
                 FanCurves = System.Text.Json.JsonSerializer.Deserialize<List<FanCurveConfig>>(System.Text.Json.JsonSerializer.Serialize(cur.FanCurves))!,
-                Lcd = new LcdSettings { Mode = cur.Lcd.Mode, Media = cur.Lcd.Media, Brightness = cur.Lcd.Brightness, Rotation = cur.Lcd.Rotation },
+                Lcd = new LcdSettings { Mode = cur.Lcd.Mode, Media = cur.Lcd.Media, Screen = cur.Lcd.Screen, Brightness = cur.Lcd.Brightness, Rotation = cur.Lcd.Rotation },
                 Keyboard = cur.Keyboard.Clone(),
             };
             _settings.Profiles.RemoveAll(p => p.Name == name);

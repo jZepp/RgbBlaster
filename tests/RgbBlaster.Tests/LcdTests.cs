@@ -68,4 +68,19 @@ public class LinkLcdTests
             Assert.Equal((P.Width, P.Height), (img.Width, img.Height));
         }
     }
+
+    [Fact]
+    public void EveryBuiltInScreenRendersWithAndWithoutValues()
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(6, 1)) return;
+        using var dash = new LcdDashboard();
+        foreach (var (id, _, _) in LcdDashboard.Screens)
+            foreach (var v in new[] { new LcdValues(61.4f, 48f, 2400), new LcdValues(null, null, null), new LcdValues(140, -5, 9000) })
+            {
+                var frame = dash.Render(id, v);
+                Assert.True(frame.Length < P.MaxChunk * 255, id);
+                using var img = System.Drawing.Image.FromStream(new MemoryStream(frame));
+                Assert.Equal((P.Width, P.Height), (img.Width, img.Height));
+            }
+    }
 }

@@ -144,6 +144,7 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
                     NativeEffectKind.Rainbow => SideWave,
                     NativeEffectKind.Cycle => SideCycle,
                     NativeEffectKind.Firmware when native.Random => SideWave,
+                    _ when native.Random => SideCycle,
                     _ => P.SideBarIndex(native.Color) ?? SideOff,
                 });
                 return;
@@ -174,10 +175,13 @@ public sealed class EVisionKeyboardDevice : IRgbDevice, INativeEffectDevice
                 WriteMode(e.Mode, e.Speed, e.Color, e.Random);
                 break;
             case NativeEffectKind.Wave:
-                WriteMode(P.ModeColorWave, Speed(e.PeriodSeconds), e.Color, false);
+                WriteMode(P.ModeColorWave, Speed(e.PeriodSeconds), e.Color, e.Random);
                 break;
             case NativeEffectKind.Breathe:
-                WriteMode(P.ModeBreathing, Speed(e.PeriodSeconds), e.Color, false);
+                WriteMode(P.ModeBreathing, Speed(e.PeriodSeconds), e.Color, e.Random);
+                break;
+            case NativeEffectKind.Sparkle:
+                WriteMode(P.ModeStarlightSlow, P.SpeedNormal, e.Color, e.Random);
                 break;
             default:
                 WriteMode(P.ModeCustom, P.SpeedNormal, Rgb.Black, false);

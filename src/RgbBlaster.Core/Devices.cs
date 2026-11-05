@@ -42,15 +42,15 @@ public interface IPersistentLighting
 
 /// <summary>
 /// Firmware stand-ins for effects. Rainbow and Breathe match the effect. Cycle (one hue turning through the wheel) and
-/// Wave (a band of Color moving) are the nearest firmware modes for effects a device cannot stream.
+/// Wave (a band of Color moving) and Sparkle (lights that flash and fade) are the nearest firmware modes for effects a device cannot stream.
 /// Firmware runs a device-specific mode chosen by the user (<see cref="NativeEffect.Mode"/>).
 /// </summary>
-public enum NativeEffectKind { None, Rainbow, Breathe, Cycle, Wave, Firmware }
+public enum NativeEffectKind { None, Rainbow, Breathe, Cycle, Wave, Sparkle, Firmware }
 
 /// <summary>An effect described as parameters, for devices that can run it in firmware instead of taking frames.</summary>
 /// <param name="Mode">Firmware only: the device's mode number.</param>
 /// <param name="Speed">Firmware only: the device's speed step.</param>
-/// <param name="Random">Firmware only: the device picks the colors.</param>
+/// <param name="Random">The device picks the colors (the effect uses several).</param>
 public readonly record struct NativeEffect(NativeEffectKind Kind, Rgb Color = default, float PeriodSeconds = 0,
     byte Mode = 0, byte Speed = 0, bool Random = false)
 {

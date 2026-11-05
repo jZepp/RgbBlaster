@@ -23,6 +23,7 @@ public static class EVisionProtocol
     public const int ColorBufferLength = LedCount * 3; // 7 packets of 54 bytes
     public const byte ModeColorWave = 0x02;   // firmware wave; with the random flag it is a rainbow
     public const byte ModeSpectrumCycle = 0x04;
+    public const byte ModeStarlightSlow = 0x0F;
     public const byte ModeBreathing = 0x05;
     public const byte ModeStatic = 0x06;
     public const byte ModeCustom = 0x14;      // per-key colors; the keyboard stores them on every write (visible flash)

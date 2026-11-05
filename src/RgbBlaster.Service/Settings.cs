@@ -38,6 +38,8 @@ public sealed class LcdSettings
     public string Mode { get; set; } = "dashboard";
     /// <summary>Media file id when Mode is "media".</summary>
     public string? Media { get; set; }
+    /// <summary>Built-in screen id when Mode is "dashboard".</summary>
+    public string Screen { get; set; } = "status";
     public byte Brightness { get; set; } = 100;
     public byte Rotation { get; set; }
 }

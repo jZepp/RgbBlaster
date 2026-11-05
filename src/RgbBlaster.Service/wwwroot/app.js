@@ -148,7 +148,7 @@ const dashboard = {
     if (!this.view) this.view = makeCaseView($('#dash-case'));
     const p = activeProfile();
     $('#dash-effect').textContent = p ? `${p.effect.type} · ${p.name}` : '';
-    $('#dash-lcd-mode').textContent = p?.lcd.mode === 'media' ? 'Custom screen' : 'Status screen';
+    $('#dash-lcd-mode').textContent = p?.lcd.mode === 'media' ? 'Custom screen' : `${cap(p?.lcd.screen ?? 'status')} screen`;
     this.history();
   },
   status(st) {
@@ -199,12 +199,23 @@ function drawTempChart(svg, pts) {
 // ---------- Lighting ----------
 const EFFECT_INFO = {
   solid: { label: 'Solid', params: ['color'] },
-  breathe: { label: 'Breathe', params: ['color', 'speed'] },
+  breathe: { label: 'Breathe', params: ['palette', 'speed'] },
   rainbow: { label: 'Rainbow', params: ['speed', 'scale'] },
-  wave: { label: 'Wave', params: ['color', 'color2', 'speed', 'angle', 'scale'] },
-  radial: { label: 'Ripple', params: ['color', 'color2', 'speed', 'scale', 'center'] },
-  cycle: { label: 'Color cycle', params: ['speed'] },
-  gradient: { label: 'Gradient', params: ['color', 'color2', 'angle'] },
+  wave: { label: 'Wave', params: ['palette', 'speed', 'angle', 'scale'] },
+  radial: { label: 'Ripple', params: ['palette', 'speed', 'scale', 'center'] },
+  cycle: { label: 'Color cycle', params: ['palette', 'speed'] },
+  gradient: { label: 'Gradient', params: ['palette', 'angle'] },
+  matrix: { label: 'Matrix', params: ['palette', 'speed', 'density'] },
+};
+const MAX_COLORS = 16;
+const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
+const PALETTES = {
+  Rainbow: ['#ff0000', '#ffff00', '#00ff00', '#00ffff', '#0000ff', '#ff00ff'],
+  Ocean: ['#00a0ff', '#00ffd0', '#0030ff', '#00e0ff'],
+  Fire: ['#ff2000', '#ff8000', '#ffd000', '#ff4000'],
+  Synthwave: ['#ff00a0', '#a000ff', '#00d0ff'],
+  Matrix: ['#00ff40', '#00c030', '#80ff80'],
+  Ice: ['#ffffff', '#80e0ff', '#2080ff'],
 };
 const lighting = {
   view: null,
@@ -213,6 +224,8 @@ const lighting = {
   enter() {
     if (!this.view) this.view = makeCaseView($('#light-case'));
     this.spec = structuredClone(activeProfile().effect);
+    if (!this.spec.colors?.length)
+      this.spec.colors = this.spec.type === 'cycle' ? [...PALETTES.Rainbow] : [this.spec.color, this.spec.color2];
     this.kb = structuredClone(activeProfile().keyboard ?? { mode: null, color: '#ffffff', speed: 3, random: false });
     this.render();
     if (!this.kbModes) api.get('/api/keyboard/modes').then(m => { this.kbModes = m; this.renderKeyboard(); });
@@ -250,12 +263,13 @@ const lighting = {
       return h('label', { class: 'field' }, label, val, input);
     };
     const kids = [];
-    if (want.has('color') || want.has('color2')) {
-      kids.push(h('div', { class: 'field-row' },
-        want.has('color') ? h('label', { class: 'field-row' }, 'Color', h('input', { type: 'color', value: this.spec.color, oninput: e => set('color', e.target.value) })) : null,
-        want.has('color2') ? h('label', { class: 'field-row' }, 'Second color', h('input', { type: 'color', value: this.spec.color2, oninput: e => set('color2', e.target.value) })) : null));
+    if (want.has('color')) {
+      kids.push(h('label', { class: 'field-row' }, 'Color', h('input', { type: 'color', value: this.spec.colors[0] ?? this.spec.color,
+        oninput: e => { this.spec.colors[0] = e.target.value; set('color', e.target.value); } })));
     }
+    if (want.has('palette')) kids.push(this.paletteEditor(set));
     if (want.has('speed')) kids.push(slider('speed', 'Speed', 0.02, 2, 0.02, v => `${(1 / v).toFixed(1)} s per cycle`));
+    if (want.has('density')) kids.push(slider('density', 'Density', 0.05, 1, 0.05, v => `${Math.round(v * 100)}% of columns`));
     if (want.has('angle')) kids.push(slider('angle', 'Direction', 0, 359, 1, v => `${Math.round(v)}° ${arrow(v)}`));
     if (want.has('scale')) kids.push(slider('scale', 'Repeats across the case', 0.25, 6, 0.25, v => `× ${(+v).toFixed(2)}`));
     if (want.has('center')) {
@@ -264,6 +278,24 @@ const lighting = {
     }
     kids.push(slider('brightness', 'Brightness', 0, 1, 0.05, v => `${Math.round(v * 100)}%`));
     p.replaceChildren(...kids);
+  },
+  // Colors in order. Click a swatch to change it, arrows to move it, × to remove it; + adds a color.
+  paletteEditor(set) {
+    const colors = this.spec.colors;
+    const commit = redraw => { set('colors', colors); if (redraw) this.render(); };
+    const swatches = colors.map((c, i) => h('div', { class: 'swatch' },
+      h('input', { type: 'color', value: c, title: `Color ${i + 1}`, oninput: e => { colors[i] = e.target.value; commit(false); } }),
+      h('div', { class: 'swatch-tools' },
+        h('button', { title: 'Move left', disabled: i === 0, onclick: () => { [colors[i - 1], colors[i]] = [colors[i], colors[i - 1]]; commit(true); } }, '‹'),
+        h('button', { title: 'Remove', disabled: colors.length <= 1, onclick: () => { colors.splice(i, 1); commit(true); } }, '×'),
+        h('button', { title: 'Move right', disabled: i === colors.length - 1, onclick: () => { [colors[i + 1], colors[i]] = [colors[i], colors[i + 1]]; commit(true); } }, '›'))));
+    const add = h('button', { class: 'swatch add', title: 'Add a color', disabled: colors.length >= MAX_COLORS,
+      onclick: () => { colors.push(colors[colors.length - 1] ?? '#ffffff'); commit(true); } }, '+');
+    const presets = h('div', { class: 'presets' }, h('span', { class: 'muted' }, 'Presets'),
+      ...Object.entries(PALETTES).map(([name, cs]) => h('button', { class: 'preset', title: name, style: `--g: linear-gradient(90deg, ${cs.join(', ')})`,
+        onclick: () => { colors.splice(0, colors.length, ...cs); commit(true); } }, name)));
+    const strip = h('div', { class: 'palette-strip', style: `background: linear-gradient(90deg, ${colors.length > 1 ? colors.join(', ') : `${colors[0]}, ${colors[0]}`})` });
+    return h('div', { class: 'field' }, `Colors (${colors.length})`, strip, h('div', { class: 'palette' }, ...swatches, add), presets);
   },
 };
 const arrow = a => ['→', '↘', '↓', '↙', '←', '↖', '↑', '↗'][Math.round(((a % 360) + 360) % 360 / 45) % 8];
@@ -589,10 +621,12 @@ const lcd = {
     }
   },
   async gallery() {
-    const media = await api.get('/api/lcd/media');
-    const pick = (mode, id) => { this.cfg.mode = mode; this.cfg.media = id; this.gallery(); this.push(); };
-    const dash = h('div', { class: 'tile dash' + (this.cfg.mode !== 'media' ? ' on' : ''), onclick: () => pick('dashboard', null) }, h('div', {}, 'Status', h('br'), 'screen'));
-    $('#lcd-gallery').replaceChildren(dash, ...media.map(m => h('div', { class: 'tile' + (this.cfg.mode === 'media' && this.cfg.media === m.id ? ' on' : ''), onclick: () => pick('media', m.id) },
+    const [media, screens] = await Promise.all([api.get('/api/lcd/media'), this.screens ??= api.get('/api/lcd/screens')]);
+    const pick = (mode, id, screen) => { this.cfg.mode = mode; this.cfg.media = id; if (screen) this.cfg.screen = screen; this.gallery(); this.push(); };
+    const builtIn = screens.map(sc => h('div', { class: 'tile' + (this.cfg.mode !== 'media' && (this.cfg.screen ?? 'status') === sc.id ? ' on' : ''), title: sc.name, onclick: () => pick('dashboard', null, sc.id) },
+      h('img', { src: `/api/lcd/screens/${sc.id}/preview?t=${Date.now()}`, alt: sc.name }),
+      h('span', { class: 'tag' }, sc.name)));
+    $('#lcd-gallery').replaceChildren(...builtIn, ...media.map(m => h('div', { class: 'tile' + (this.cfg.mode === 'media' && this.cfg.media === m.id ? ' on' : ''), onclick: () => pick('media', m.id) },
       h('img', { src: `/api/lcd/media/${encodeURIComponent(m.id)}`, alt: '', loading: 'lazy' }),
       m.animated ? h('span', { class: 'tag' }, 'Animated') : null,
       h('button', { class: 'del', title: 'Delete', onclick: async e => { e.stopPropagation(); await act(api.send('DELETE', `/api/lcd/media/${encodeURIComponent(m.id)}`), 'Deleted.'); this.gallery(); } }, '×'))));
@@ -620,7 +654,7 @@ const profiles = {
     $('#profile-list').replaceChildren(...state.settings.profiles.map(p => {
       const on = p.name === state.settings.activeProfile;
       return h('div', { class: 'profile' + (on ? ' on' : '') },
-        h('div', {}, h('div', { class: 'name' }, p.name), h('div', { class: 'sub' }, `${EFFECT_INFO[p.effect.type]?.label ?? p.effect.type} · ${p.fanCurves.length} fan curve(s) · ${p.lcd.mode === 'media' ? 'custom screen' : 'status screen'}`)),
+        h('div', {}, h('div', { class: 'name' }, p.name), h('div', { class: 'sub' }, `${EFFECT_INFO[p.effect.type]?.label ?? p.effect.type} · ${p.fanCurves.length} fan curve(s) · ${p.lcd.mode === 'media' ? 'custom screen' : `${p.lcd.screen ?? 'status'} screen`}`)),
         h('div', { class: 'btns' },
           on ? h('span', { class: 'muted' }, 'Active') : h('button', { class: 'btn small', onclick: () => activate(p.name) }, 'Activate'),
           on ? null : h('button', { class: 'btn small danger', onclick: async () => { await act(api.send('DELETE', `/api/profiles/${encodeURIComponent(p.name)}`), 'Profile deleted.'); await loadSettings(); this.enter(); } }, 'Delete')));
